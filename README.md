@@ -129,6 +129,11 @@ mode     = "passthrough"
 
 `ccauth init` documents every provider/gateway combination. Env overrides for CI/headless: `CCAUTH_TENANT_ID`, `CCAUTH_CLIENT_ID`, `CCAUTH_CLIENT_SECRET`, `CCAUTH_ISSUER`, `CCAUTH_BASE_URL`.
 
+**Setting up your identity provider?** Step-by-step guides (provider app + the matching gateway validation values):
+[Microsoft Entra ID](docs/identity-providers/entra-id.md) ·
+[Google Workspace](docs/identity-providers/google-workspace.md) ·
+[Keycloak / generic OIDC](docs/identity-providers/keycloak.md).
+
 ## Enterprise / IT deployment
 
 Users shouldn't type tenant/client IDs or run a wizard. IT provisions everything centrally and the developer runs only `ccauth login` (or nothing — the helper opens the browser when needed). Config is layered (`user < embedded < managed < remote`), distributable via **MDM managed file**, **remote config URL**, or a **compile-time embedded** branded binary, with an optional `allow_user_profiles = false` lockdown.

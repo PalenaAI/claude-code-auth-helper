@@ -142,6 +142,8 @@ via `ANTHROPIC_CUSTOM_HEADERS` to dodge the precedence entirely.
 
 ## 5. Per-identity-provider token choice
 
+> Step-by-step provider setup lives in [docs/identity-providers/](docs/identity-providers/) — [Entra ID](docs/identity-providers/entra-id.md), [Google Workspace](docs/identity-providers/google-workspace.md), [Keycloak / generic OIDC](docs/identity-providers/keycloak.md).
+
 | Provider | Emit | Why | Flow | JWKS the gateway uses |
 |---|---|---|---|---|
 | **Entra ID** | **access token**, `aud = api://<gateway-app>` | Entra is designed to issue API-audience access tokens | auth-code+PKCE+loopback (device-code fallback); `offline_access` for refresh | `https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys` |
