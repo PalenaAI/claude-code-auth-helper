@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://github.com/PalenaAI/claude-code-auth-helper/releases"><img src="https://img.shields.io/github/v/release/PalenaAI/claude-code-auth-helper?include_prereleases&sort=semver&label=release" alt="Release" /></a>
   <a href="https://github.com/PalenaAI/claude-code-auth-helper/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/PalenaAI/claude-code-auth-helper/ci.yml?branch=main&label=ci" alt="CI" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/PalenaAI/claude-code-auth-helper?color=blue" alt="License" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0" /></a>
   <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/PalenaAI/claude-code-auth-helper" alt="Go version" /></a>
   <img src="https://img.shields.io/badge/for-Claude%20Code-D97757?logo=claude&logoColor=white" alt="For Claude Code" />
   <img src="https://img.shields.io/badge/SSO-Entra%20%7C%20Google%20%7C%20OIDC-2ea44f" alt="SSO providers" />
