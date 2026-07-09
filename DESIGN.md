@@ -49,8 +49,10 @@ key-based ones), the token arrives. It also refreshes automatically (see §2.2).
 - It is re-run when a request returns **HTTP 401** (the backstop for expiry).
 - It must return in **< 10 s** (ideally < 2 s) or the UX degrades.
 
-The < 10 s budget is the reason for the architecture in §3: the helper cannot run
-an interactive browser flow. It must be a fast, cached, silent-refresh path.
+The < 10 s budget shapes the architecture in §3: the helper does no terminal
+prompts and is **silent-first** — a cached read, then a silent refresh. Only when
+the refresh token itself is dead does it fall back to opening a browser (bounded
+and lock-serialized; see §3.2).
 
 ---
 
@@ -73,8 +75,8 @@ responsibilities — the same pattern used by `kubelogin`, `aws-vault`, and `gcl
  many times      │   • reads cache, silently refreshes near exp  │
    ───────────►  │   • passthrough: emit the IdP JWT             │
                  │   • exchange:   IdP JWT → gateway key → emit  │
-                 │   • never opens a browser; exits non-zero if   │
-                 │     login is required                          │
+                 │   • silent refresh; opens a browser only if   │
+                 │     the refresh token is dead (§3.2)          │
                  └──────────────────────────────────────────────┘
                                      │ stdout: credential
                                      ▼
@@ -173,7 +175,9 @@ The helper reads `CLAUDE_CODE_API_KEY_HELPER_TTL_MS` from its own environment
 2. Else refresh the IdP token via the stored refresh token (once), then:
    - passthrough → emit the chosen (access/ID) token;
    - exchange → call the exchange endpoint, cache the gateway key + its TTL, emit it.
-3. If there is no refresh token / refresh fails → exit non-zero pointing at `ccauth login`.
+3. If there is no refresh token / refresh fails → escalate to an interactive
+   browser login when allowed (§3.2), then retry once; otherwise (headless, or
+   auto-reauth disabled) exit non-zero pointing at `ccauth login`.
 
 HTTP 401 from the gateway is the backstop: Claude Code re-invokes the helper,
 which refreshes.
