@@ -1,0 +1,23 @@
+# ccauth embedded defaults (compiled into the binary).
+#
+# By default this file is empty of settings, so a stock `ccauth` build has no
+# baked-in configuration. IT teams that want a fully self-contained, branded
+# binary can put an organization config here (any valid config.toml content —
+# profiles, config_url, allow_user_profiles) and rebuild. See ENTERPRISE.md.
+#
+# Example (uncomment and edit, then `make build`):
+#
+# config_url          = "https://ccauth.corp.example.com/config.toml"
+# allow_user_profiles = false
+# default_profile     = "corp"
+#
+# [profiles.corp]
+# provider = "entra"
+# gateway  = "litellm"
+# mode     = "passthrough"
+#   [profiles.corp.oauth]
+#   tenant_id = "..."
+#   client_id = "..."
+#   scopes    = ["api://.../.default"]
+#   [profiles.corp.gateway_opts]
+#   base_url = "https://llm-gateway.corp.example.com"

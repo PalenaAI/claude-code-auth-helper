@@ -1,0 +1,47 @@
+# LiteLLM proxy config for validating an Entra ID / OIDC JWT that ccauth emits.
+# Requires a LiteLLM Enterprise license for enable_jwt_auth.
+#
+# Start:  litellm --config config.yaml
+# ccauth: mode = passthrough, gateway = litellm, base_url = http://localhost:4000
+
+model_list:
+  - model_name: claude-sonnet-4-5
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY   # the REAL upstream key lives server-side
+  - model_name: claude-opus-4-1
+    litellm_params:
+      model: anthropic/claude-opus-4-1
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+  # ---- Inbound JWT auth (Enterprise) -------------------------------------
+  # The client (Claude Code via ccauth) sends: Authorization: Bearer <IdP JWT>.
+  enable_jwt_auth: true
+  litellm_jwtauth:
+    user_id_jwt_field: "sub"          # who the user is
+    team_id_jwt_field: "oid"          # Entra object id, or "groups"/"tid" as you prefer
+    roles_jwt_field: "roles"          # Entra app roles; Keycloak: resource_access.<client>.roles
+    user_id_upsert: true              # auto-create users on first sight
+    enforce_rbac: true
+    role_permissions:
+      - role: internal_user
+        models: ["claude-sonnet-4-5", "claude-opus-4-1"]
+
+# ---- Environment (set before launching the proxy) -------------------------
+# JWKS + issuer/audience validation. ALWAYS set JWT_AUDIENCE and JWT_ISSUER —
+# if unset, LiteLLM SILENTLY disables those checks.
+#
+#   Entra ID:
+#     export JWT_PUBLIC_KEY_URL="https://login.microsoftonline.com/<tenant>/discovery/v2.0/keys"
+#     export JWT_ISSUER="https://login.microsoftonline.com/<tenant>/v2.0"
+#     export JWT_AUDIENCE="<gateway-app-client-id-GUID>"      # v2 access token aud
+#
+#   Generic OIDC (Okta/Auth0/Keycloak): use that provider's jwks_uri / issuer.
+#
+# For Google (opaque access tokens), don't use enable_jwt_auth on the access
+# token — either have ccauth emit the ID token (credential_token = "id") and set
+# JWT_* to Google's values, or use enable_oauth2_auth + OAUTH_TOKEN_INFO_ENDPOINT
+# to introspect the opaque token.

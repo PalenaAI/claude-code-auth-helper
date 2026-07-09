@@ -1,0 +1,18 @@
+# Default owners — reviewed on every PR.
+*                               @PalenaAI/maintainers
+
+# Auth-sensitive packages: credential handling, OAuth flows, and secret storage
+# get an extra security review.
+/internal/oidc/                 @PalenaAI/maintainers @PalenaAI/security
+/internal/credential/           @PalenaAI/maintainers @PalenaAI/security
+/internal/store/                @PalenaAI/maintainers @PalenaAI/security
+
+# Workflow and release tooling: any change here affects supply-chain integrity.
+/.github/workflows/             @PalenaAI/maintainers @PalenaAI/security
+/.github/dco.yml                @PalenaAI/maintainers @PalenaAI/security
+/.github/CODEOWNERS             @PalenaAI/maintainers @PalenaAI/security
+/SECURITY.md                    @PalenaAI/maintainers @PalenaAI/security
+/.licenserc.yaml                @PalenaAI/maintainers @PalenaAI/security
+
+# Reference security plugin (Bifrost edge auth).
+/examples/bifrost-plugin/       @PalenaAI/maintainers @PalenaAI/security

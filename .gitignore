@@ -1,0 +1,18 @@
+# Binaries
+/ccauth
+/dist/
+*.exe
+*.test
+*.out
+
+# Local credentials / config that may contain secrets
+config.local.toml
+*.local.toml
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Go
+/vendor/
