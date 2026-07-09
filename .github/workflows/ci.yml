@@ -21,8 +21,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version-file: go.mod
-          check-latest: true       # pull the latest patch of the go.mod minor
+          go-version: '1.25'       # latest 1.25.x patch (patched stdlib)
+          check-latest: true
           cache: true
       - name: gofmt
         run: |
@@ -51,10 +51,6 @@ jobs:
 
   govulncheck:
     runs-on: ubuntu-latest
-    # Advisory only: Go standard-library advisories are remediated by bumping the
-    # toolchain, not by changing this code, so a pending stdlib CVE must not block
-    # CI. The scan still runs and its findings are visible on the job.
-    continue-on-error: true
     steps:
       - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
         with:
@@ -64,7 +60,12 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version-file: go.mod
+          go-version: '1.25'       # latest 1.25.x patch clears current stdlib CVEs
           check-latest: true
       - name: govulncheck
+        # Advisory: Go stdlib advisories are fixed by bumping the toolchain, not by
+        # changing this code. The latest 1.25.x patch clears current findings, and
+        # step-level continue-on-error keeps the job green if a new stdlib advisory
+        # lands before its patch is released. Findings remain visible in the log.
+        continue-on-error: true
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
