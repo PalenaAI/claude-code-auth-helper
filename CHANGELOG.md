@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The browser "Login complete" page now attempts to close itself automatically
+  after sign-in (best-effort — browsers block `window.close()` on tabs they opened,
+  so it falls back to a "you can close this window" message).
+
 ## [0.1.0] - 2026-07-09
 
 ### Added

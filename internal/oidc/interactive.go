@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"html"
 	"net"
 	"net/http"
 	"os"
@@ -52,16 +53,16 @@ func (f *flow) authCodeLogin(ctx context.Context) (*oauth2.Token, error) {
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if e := q.Get("error"); e != "" {
-			writePage(w, "Login failed", "Authentication failed: "+e+". You can close this window.")
+			writePage(w, "Login failed", "Authentication failed: "+e+". You can close this window.", false)
 			resCh <- result{err: fmt.Errorf("authorization error: %s: %s", e, q.Get("error_description"))}
 			return
 		}
 		if q.Get("state") != state {
-			writePage(w, "Login failed", "State mismatch. You can close this window.")
+			writePage(w, "Login failed", "State mismatch. You can close this window.", false)
 			resCh <- result{err: fmt.Errorf("state mismatch (possible CSRF)")}
 			return
 		}
-		writePage(w, "Login complete", "ccauth received your credentials. You can close this window and return to the terminal.")
+		writePage(w, "Login complete", "ccauth received your credentials — this window will close automatically.", true)
 		resCh <- result{code: q.Get("code")}
 	})
 
@@ -123,11 +124,23 @@ func randToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func writePage(w http.ResponseWriter, title, body string) {
+func writePage(w http.ResponseWriter, title, body string, autoClose bool) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	title = html.EscapeString(title)
+	body = html.EscapeString(body)
+	// Best-effort auto-close: browsers only permit window.close() on tabs opened by
+	// script, so if the browser refuses we reveal a "you can close this" fallback.
+	extra := ""
+	if autoClose {
+		extra = `<p id="cc-fallback" style="color:#888;font-size:.9em;display:none">` +
+			`You can close this window and return to the terminal.</p>` +
+			`<script>setTimeout(function(){window.close();` +
+			`setTimeout(function(){var f=document.getElementById('cc-fallback');` +
+			`if(f){f.style.display='block';}},500);},1200);</script>`
+	}
 	fmt.Fprintf(w, "<!doctype html><meta charset=utf-8><title>%s</title>"+
 		"<body style=\"font-family:system-ui;max-width:32rem;margin:4rem auto;text-align:center\">"+
-		"<h2>%s</h2><p>%s</p></body>", title, title, body)
+		"<h2>%s</h2><p>%s</p>%s</body>", title, title, body, extra)
 }
 
 // BrowserAvailable reports whether a system browser can plausibly be launched in
