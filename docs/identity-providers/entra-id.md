@@ -34,8 +34,10 @@ From the **Overview** page, copy these — you'll need them later:
 
 **Authentication → Add a platform → Mobile and desktop applications.**
 
-- Add the redirect URI **`http://localhost`** (Entra treats loopback specially and
-  allows any port at runtime — you do **not** need to pin a port).
+- Add the redirect URI **`http://localhost:8765/callback`**. Entra ignores the
+  *port* for loopback URIs but the **path must match** `ccauth`'s `/callback` — so a
+  bare `http://localhost` does **not** work. Pin the matching port in the profile
+  (`redirect_port = 8765`, Part B) so the request and the registration match exactly.
 - **Save.**
 
 Then, still under **Authentication → Advanced settings**, set
@@ -64,6 +66,12 @@ permissions → check `access_as_user` → Add permissions.**
 
 Then **Grant admin consent for &lt;tenant&gt;** and confirm the status shows a green
 check.
+
+> **Single-app scope format (avoids AADSTS90009).** Because this app requests a
+> token for *itself*, Entra requires the scope to use the **GUID-based** identifier,
+> **not** the `api://…` URI. Use `<client-id>/.default` (e.g.
+> `e1e96c7a-…/.default`). The `api://…/.default` form only works when the client and
+> the API are *separate* app registrations.
 
 ### 5. (Recommended) Force v2 access tokens
 
@@ -100,8 +108,10 @@ mode     = "passthrough"
   [profiles.entra.oauth]
   tenant_id = "<Directory (tenant) ID>"
   client_id = "<Application (client) ID>"
-  scopes    = ["api://<your Application ID URI>/.default"]   # e.g. api://ccauth-gateway/.default
-  flow      = "auth_code"        # use "device_code" for headless/SSH
+  # Single app (client == API): use the GUID form, NOT api://… (see note below).
+  scopes        = ["<Application (client) ID>/.default"]   # e.g. e1e96c7a-…/.default
+  flow          = "auth_code"        # use "device_code" for headless/SSH
+  redirect_port = 8765               # must match the registered http://localhost:8765/callback
 
   [profiles.entra.gateway_opts]
   base_url = "http://localhost:4000"
@@ -159,8 +169,9 @@ for any OIDC gateway, point it at the JWKS URL and set the issuer + audience.
 
 | Symptom | Cause / fix |
 |---|---|
-| Browser login fails instantly / "redirect URI mismatch" | Missing `http://localhost` redirect under *Mobile and desktop applications*, or "Allow public client flows" not set to Yes (Part A steps 2). |
+| `AADSTS50011` redirect URI does not match | Register **`http://localhost:8765/callback`** (with the `/callback` path) and set `redirect_port = 8765` in the profile. Entra ignores the port but **not** the path, and `ccauth` uses a random port unless you pin it — so bare `http://localhost` or a stale-port entry won't match. Also confirm "Allow public client flows" = Yes. |
 | `ccauth login` errors with `invalid_scope` / `AADSTS65001` | The app isn't consented to its own API — do Part A step 4 (add the scope under *My APIs* and grant admin consent). |
+| `AADSTS90009` "Application … is requesting a token for itself … GUID based App Identifier" | Single app (client == API). Use the **GUID form** in `scopes`: `<client-id>/.default`, **not** `api://<client-id>/.default`. |
 | Gateway returns `401`, token looks valid | `aud`/`iss` mismatch. Decode the token (Part B) and set the gateway's `JWT_AUDIENCE`/`JWT_ISSUER` to the **exact** values in the token. Remember v1 vs v2 `aud` format (Part A step 5). |
 | Device-code login blocked | Conditional Access can block device code; use `flow = "auth_code"`. |
 | Works via curl but Claude Code 401s | Corporate WAF may strip/inspect the `/v1/messages` body — exempt that path (Claude prompts trip XSS rules). |

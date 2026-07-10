@@ -3,6 +3,24 @@
 #
 # Start:  litellm --config config.yaml
 # ccauth: mode = passthrough, gateway = litellm, base_url = http://localhost:4000
+#
+# Endpoint note: Claude Code POSTs to <base_url>/v1/messages (the unified Anthropic
+# endpoint). LiteLLM registers this ONLY as /v1/messages — there is no /messages
+# alias (unlike the OpenAI routes, which work with and without /v1).
+#
+# Watch for a path-stripping reverse proxy / API gateway in front of LiteLLM. If
+# something (nginx, an Azure Application Gateway "override backend path", etc.)
+# strips the /v1 prefix, /v1/messages arrives as /messages -> 404
+# ({"detail":"Not Found"}) even though OpenAI routes still work. Confirm by watching
+# the LiteLLM logs while calling externally:
+#   POST /v1/messages  logged as  "POST /messages ... 404"   <- /v1 is being stripped
+# Fix the proxy to preserve /v1 (do not strip it for the messages endpoint).
+#
+# Also do NOT use the /anthropic passthrough (/anthropic/v1/messages) to reach a
+# non-Anthropic backend (Azure Foundry, Bedrock, ...): the passthrough proxies
+# straight to api.anthropic.com and ignores your model_list, so it forwards your
+# inbound token to Anthropic and fails with "Invalid bearer token". Use the unified
+# /v1/messages endpoint, which routes via model_list to the configured backend.
 
 model_list:
   - model_name: claude-sonnet-4-5
