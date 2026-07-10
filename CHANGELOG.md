@@ -7,11 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-10
+
+### Added
+
+- Identity-provider setup guides for Entra ID, Google Workspace, and Keycloak,
+  each with the matching gateway JWT-validation values.
+
 ### Changed
 
-- The browser "Login complete" page now attempts to close itself automatically
-  after sign-in (best-effort — browsers block `window.close()` on tabs they opened,
-  so it falls back to a "you can close this window" message).
+- The browser "Login complete" page now auto-closes after sign-in (best-effort;
+  falls back to a "you can close this window" message where the browser blocks it).
+
+### Fixed
+
+- CI builds with the latest patched Go 1.25.x so govulncheck stays green.
 
 ## [0.1.0] - 2026-07-09
 
@@ -38,5 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Reference material:** `DESIGN.md`, `ENTERPRISE.md`, LiteLLM and Portkey
   examples, a Bifrost edge-auth plugin, and a token-exchange broker contract.
 
-[Unreleased]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/PalenaAI/claude-code-auth-helper/releases/tag/v0.1.0
