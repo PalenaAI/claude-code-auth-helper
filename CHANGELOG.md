@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outrank `apiKeyHelper`, managed `forceLoginMethod`/`forceLoginOrgUUID` (which
   block it), a missing/foreign helper, a missing `ANTHROPIC_BASE_URL`, and
   project-level helpers that need workspace trust.
+- Native Go fuzz tests for the unverified JWT reader and config parsing/resolution
+  (`make fuzz`, smoke-run in CI).
+- CodeQL static analysis and Dependabot (Go modules + GitHub Actions).
 
 ### Changed
 
@@ -27,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs updated for current Claude Code helper behavior (re-run on 401/403 and on
   expired JWTs, slow-helper warning, credential precedence) and managed-settings
   paths/drop-ins.
+- Minimum Go is now 1.26 (Go 1.25 is out of support); CI and releases build
+  with the latest Go 1.27.x.
+- The release workflow's `GITHUB_TOKEN` is read-only by default; only the
+  release job gets `contents: write`.
+
+### Security
+
+- Bump `golang.org/x/sys` to v0.49.0 (GO-2026-5024 / CVE-2026-39824, Windows
+  `NewNTUnicodeString` overflow), plus `golang.org/x/oauth2` v0.37.0,
+  `go-oidc` v3.21.0 and `go-jose` v4.1.5.
 
 ## [0.1.1] - 2026-07-10
 

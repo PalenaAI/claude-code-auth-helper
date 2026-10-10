@@ -8,11 +8,13 @@ on:
       - 'v*'
 
 permissions:
-  contents: write   # required to create the release
+  contents: read    # least privilege by default; jobs elevate as needed
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to create the release
     steps:
       - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
         with:
@@ -24,7 +26,7 @@ jobs:
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.25'       # build releases with the latest patched 1.25.x
+          go-version: '1.27'       # build releases with the latest patched Go
           check-latest: true
           cache: true
 

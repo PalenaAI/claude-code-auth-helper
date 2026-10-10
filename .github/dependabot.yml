@@ -1,0 +1,25 @@
+# Keeps Go modules and pinned GitHub Actions current. Actions stay SHA-pinned;
+# Dependabot rewrites the SHA and the trailing version comment together.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directories:
+      - "/"
+      - "/examples/bifrost-plugin"
+    schedule:
+      interval: weekly
+    groups:
+      go-deps:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(ci)"

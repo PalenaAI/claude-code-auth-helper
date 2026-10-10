@@ -9,7 +9,7 @@ DIST_DOCS := LICENSE NOTICE README.md
 # GOOS/GOARCH targets built by `make cross`.
 PLATFORMS := darwin/arm64 darwin/amd64 linux/arm64 linux/amd64 windows/amd64
 
-.PHONY: build install test vet tidy fmt license-check clean cross package checksums
+.PHONY: build install test fuzz vet tidy fmt license-check clean cross package checksums
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BINARY) $(PKG)
@@ -19,6 +19,12 @@ install:
 
 test:
 	go test -race ./...
+
+# Run each native Go fuzz target for FUZZTIME (default 30s).
+FUZZTIME ?= 30s
+fuzz:
+	go test ./internal/jwtutil -run '^$$' -fuzz '^FuzzParse$$' -fuzztime $(FUZZTIME)
+	go test ./internal/config -run '^$$' -fuzz '^FuzzParseAndResolve$$' -fuzztime $(FUZZTIME)
 
 vet:
 	go vet ./...

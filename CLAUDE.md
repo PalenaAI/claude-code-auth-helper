@@ -13,7 +13,8 @@ Go (single static binary). Deps: `spf13/cobra` (CLI), `coreos/go-oidc/v3` +
 
 ## Commands
 - `make build` → `./ccauth`   ·   `make install`   ·   `make cross` (dist/ binaries)
-- `make test` / `go test ./...`   ·   `make vet`   ·   `make tidy`
+- `make test` / `go test ./...`   ·   `make vet`   ·   `make tidy`   ·   `make fuzz` (FUZZTIME=30s)
+- Go: module minimum 1.26; CI/release build with Go 1.27 (keep on a supported release)
 
 ## Layout
 - `cmd/ccauth` — entrypoint

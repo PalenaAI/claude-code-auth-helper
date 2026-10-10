@@ -21,7 +21,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.25'       # latest 1.25.x patch (patched stdlib)
+          go-version: '1.27'       # latest supported Go (patched stdlib); go.mod minimum is 1.26
           check-latest: true
           cache: true
       - name: gofmt
@@ -36,6 +36,23 @@ jobs:
         run: go build ./...
       - name: test
         run: go test -race ./...
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27'
+          check-latest: true
+          cache: true
+      - name: fuzz (smoke)
+        run: make fuzz FUZZTIME=20s
 
   license-header:
     runs-on: ubuntu-latest
@@ -60,11 +77,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.25'       # latest 1.25.x patch clears current stdlib CVEs
+          go-version: '1.27'       # latest patch release clears current stdlib CVEs
           check-latest: true
       - name: govulncheck
         # Advisory: Go stdlib advisories are fixed by bumping the toolchain, not by
-        # changing this code. The latest 1.25.x patch clears current findings, and
+        # changing this code. The latest patch release clears current findings, and
         # step-level continue-on-error keeps the job green if a new stdlib advisory
         # lands before its patch is released. Findings remain visible in the log.
         continue-on-error: true

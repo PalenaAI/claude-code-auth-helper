@@ -24,7 +24,7 @@ Two lightweight requirements apply to every contribution:
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - git
 - (optional) a real Entra/Google/OIDC app registration and a gateway to test end-to-end
 

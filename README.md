@@ -62,7 +62,7 @@ When a company puts an **AI gateway** in front of Claude Code, it wants the cred
 brew install PalenaAI/tap/ccauth
 ```
 
-**From source** (Go 1.25+):
+**From source** (Go 1.26+):
 
 ```bash
 git clone https://github.com/PalenaAI/claude-code-auth-helper.git
@@ -185,6 +185,7 @@ Run `ccauth doctor --probe` to exercise the whole path end-to-end (credential re
 ```bash
 make build          # ./ccauth
 make test           # unit tests (race)
+make fuzz           # native Go fuzzers (FUZZTIME=30s each)
 make vet
 make license-check  # verify Apache headers
 make package        # dist/ cross-compiled binaries + LICENSE/NOTICE + SHA256SUMS
