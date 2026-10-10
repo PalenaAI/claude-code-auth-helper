@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `brew install PalenaAI/tap/ccauth` no longer builds from source. Releases now
+  attach Homebrew bottles (macOS arm64/Intel, built on macOS 15 and used on 15,
+  26 and 27; Linux x86_64/arm64), so installs no longer fail when the Command Line
+  Tools don't match the installed macOS. A manual `release` workflow run with a
+  tag rebuilds bottles for an existing release.
+
+## [0.1.2] - 2026-10-10
+
 ### Added
 
 - `gateway_opts.model`, `haiku_model` and `model_discovery` emit

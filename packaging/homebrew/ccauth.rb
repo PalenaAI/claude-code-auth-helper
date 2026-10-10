@@ -1,7 +1,9 @@
 # Template for the Homebrew formula published to PalenaAI/homebrew-tap.
-# .github/workflows/release.yml fills in the version and sha256 on each tag and
-# pushes the rendered file to the tap. Build-from-source so it stays eligible for
-# a future homebrew-core submission.
+# .github/workflows/release.yml renders it with render-formula.sh on each tag: it
+# fills in the version and sha256, adds bottles built on CI runners, and pushes
+# the result to the tap. Bottles mean users never build locally, so installs
+# work regardless of the user's Command Line Tools or macOS version. The source
+# build stays as the fallback for platforms without a bottle.
 class Ccauth < Formula
   desc "OAuth2/SSO credential helper for Claude Code and AI gateways"
   homepage "https://github.com/PalenaAI/claude-code-auth-helper"
@@ -9,6 +11,8 @@ class Ccauth < Formula
   sha256 "__SHA256__"
   license "Apache-2.0"
   head "https://github.com/PalenaAI/claude-code-auth-helper.git", branch: "main"
+
+  # __BOTTLE__ (replaced by the release workflow with prebuilt bottles)
 
   depends_on "go" => :build
 
