@@ -26,6 +26,9 @@ type Info struct {
 	BaseURLHint string
 	// SetupNotes are gateway-side steps the operator must perform.
 	SetupNotes []string
+	// DiscoveryNotes apply only when the profile enables model discovery
+	// (Claude Code calls GET <base>/v1/models with the same credential).
+	DiscoveryNotes []string
 }
 
 var registry = map[config.Gateway]Info{
@@ -40,6 +43,9 @@ var registry = map[config.Gateway]Info{
 			"Map claims via litellm_jwtauth (user_id_jwt_field, team_id_jwt_field, roles_jwt_field).",
 			"For opaque tokens (e.g. Google access tokens) use enable_oauth2_auth + OAUTH_TOKEN_INFO_ENDPOINT instead.",
 		},
+		DiscoveryNotes: []string{
+			"JWT callers may call /v1/models by default (openai_routes/info_routes); if you override team_allowed_routes, keep info_routes or list /v1/models.",
+		},
 	},
 	config.GatewayPortkey: {
 		Name:        "Portkey",
@@ -51,6 +57,9 @@ var registry = map[config.Gateway]Info{
 			"JWTs must be RS256; header must carry a matching kid.",
 			"Route to Anthropic via the x-portkey-provider header (e.g. @anthropic-prod from the Model Catalog).",
 			"Mode B maps a standard IdP token to org/workspace server-side; Mode A expects Portkey claims in the token.",
+		},
+		DiscoveryNotes: []string{
+			"GET /v1/models needs the completions.write (or models.list) scope on the JWT; it lists the x-portkey-provider's models in OpenAI shape, which Claude Code accepts (it reads data[].id).",
 		},
 	},
 	config.GatewayBifrost: {
@@ -64,6 +73,9 @@ var registry = map[config.Gateway]Info{
 			"Alternatively write a Go HTTPTransportPreHook plugin that validates the JWT (see examples/bifrost-plugin).",
 			"Set enforce_auth_on_inference: true so the virtual key is actually required.",
 		},
+		DiscoveryNotes: []string{
+			"Bifrost serves GET /anthropic/v1/models (Anthropic format); make sure your exchanged key or auth plugin is also authorized on that route.",
+		},
 	},
 	config.GatewayGeneric: {
 		Name:        "Generic OIDC gateway",
@@ -74,6 +86,9 @@ var registry = map[config.Gateway]Info{
 			"Configure the gateway (Envoy/APISIX/Kong/custom) to validate the bearer JWT against your IdP JWKS.",
 			"Validate signature + iss + aud + exp, and enforce required scopes/roles.",
 			"Exempt the /v1/messages path from WAF XSS body inspection (Claude prompts trip those rules).",
+		},
+		DiscoveryNotes: []string{
+			"Serve GET /v1/models (data[].id) at the base URL without redirects, validating the same bearer JWT as /v1/messages.",
 		},
 	},
 }
@@ -93,6 +108,20 @@ func All() []Info {
 		out = append(out, registry[config.Gateway(k)])
 	}
 	return out
+}
+
+// discoveryCommonNote applies to every gateway when model discovery is on.
+const discoveryCommonNote = "Model discovery keeps only IDs containing \"claude\" or \"anthropic\" and fails silently (3 s timeout) back to the built-in model list."
+
+// Notes returns the gateway-side checklist for a profile: the setup notes plus,
+// when the profile enables model discovery, what GET /v1/models needs.
+func (i Info) Notes(p config.Profile) []string {
+	notes := append([]string{}, i.SetupNotes...)
+	if p.GatewayOpts.ModelDiscovery {
+		notes = append(notes, i.DiscoveryNotes...)
+		notes = append(notes, discoveryCommonNote)
+	}
+	return notes
 }
 
 // CustomHeaders renders a profile's static routing headers into the

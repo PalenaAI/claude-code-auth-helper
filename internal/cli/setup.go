@@ -110,6 +110,11 @@ func newSetupCmd() *cobra.Command {
 				prof.GatewayOpts.Headers = map[string]string{"x-portkey-provider": slug}
 			}
 
+			// Background tasks and the haiku alias use Claude Code's default Haiku
+			// model ID, which many gateways don't serve under that name.
+			prof.GatewayOpts.HaikuModel = ask(r, "Model for background tasks / haiku alias, if your gateway names it differently (blank = Claude Code default)", "")
+			prof.GatewayOpts.ModelDiscovery = strings.EqualFold(ask(r, "Let Claude Code discover models via GET /v1/models on the gateway? (yes/no)", "no"), "yes")
+
 			cfg.Profiles[name] = prof
 			if cfg.DefaultProfile == "" {
 				cfg.DefaultProfile = name
@@ -130,17 +135,19 @@ func newSetupCmd() *cobra.Command {
 			fmt.Fprintln(cmd.OutOrStdout(), js)
 
 			if write {
-				if err := mergeClaudeSettings(name, resolved); err != nil {
+				notes, err := mergeClaudeSettings(name, resolved)
+				if err != nil {
 					return fmt.Errorf("failed to update %s: %w", claudeSettingsPath(), err)
 				}
 				fmt.Fprintf(os.Stderr, "\n✓ Merged wiring into %s\n", claudeSettingsPath())
+				printNotes(notes)
 			} else {
 				fmt.Fprintln(os.Stderr, "\nRe-run with --write to merge that into your Claude Code settings automatically.")
 			}
 
-			if len(gi.SetupNotes) > 0 {
+			if len(gi.Notes(resolved)) > 0 {
 				fmt.Fprintf(os.Stderr, "\nGateway-side setup for %s:\n", gi.Name)
-				for _, n := range gi.SetupNotes {
+				for _, n := range gi.Notes(resolved) {
 					fmt.Fprintf(os.Stderr, "  • %s\n", n)
 				}
 			}
@@ -187,10 +194,12 @@ func newWireCmd() *cobra.Command {
 				return err
 			}
 			if write {
-				if err := mergeClaudeSettings(name, prof); err != nil {
-					return err
+				notes, err := mergeClaudeSettings(name, prof)
+				if err != nil {
+					return fmt.Errorf("failed to update %s: %w", claudeSettingsPath(), err)
 				}
 				fmt.Fprintf(os.Stderr, "Merged wiring for %q into %s\n", name, claudeSettingsPath())
+				printNotes(notes)
 				return nil
 			}
 			js, err := settingsJSON(name, prof)
@@ -203,6 +212,13 @@ func newWireCmd() *cobra.Command {
 	}
 	c.Flags().BoolVar(&write, "write", false, "merge into ~/.claude/settings.json instead of printing")
 	return c
+}
+
+// printNotes prints wiring notes (migrations, precedence conflicts) to stderr.
+func printNotes(notes []string) {
+	for _, n := range notes {
+		fmt.Fprintf(os.Stderr, "  ⚠ %s\n", n)
+	}
 }
 
 // ----- prompt helpers ----------------------------------------------------

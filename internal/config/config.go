@@ -117,6 +117,17 @@ type GatewayOpts struct {
 	BaseURL string            `toml:"base_url"`
 	Headers map[string]string `toml:"headers"`
 	TTLms   int               `toml:"ttl_ms"`
+	// Model pins the main model (ANTHROPIC_MODEL) to one the gateway serves.
+	Model string `toml:"model"`
+	// HaikuModel is what the haiku alias and background tasks resolve to
+	// (ANTHROPIC_DEFAULT_HAIKU_MODEL; replaces the deprecated
+	// ANTHROPIC_SMALL_FAST_MODEL). Set it when the gateway does not serve
+	// Claude Code's default Haiku model ID.
+	HaikuModel string `toml:"haiku_model"`
+	// ModelDiscovery makes Claude Code list models via GET /v1/models at
+	// startup (CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY). The gateway must
+	// accept the same credential on that route as on /v1/messages.
+	ModelDiscovery bool `toml:"model_discovery"`
 }
 
 // Exchange configures token-exchange (mode = exchange).

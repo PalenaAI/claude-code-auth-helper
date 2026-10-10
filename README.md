@@ -56,14 +56,22 @@ When a company puts an **AI gateway** in front of Claude Code, it wants the cred
 
 ## Install
 
+**Homebrew** (macOS / Linux):
+
 ```bash
-# from source (Go 1.25+)
+brew install PalenaAI/tap/ccauth
+```
+
+**From source** (Go 1.25+):
+
+```bash
 git clone https://github.com/PalenaAI/claude-code-auth-helper.git
 cd claude-code-auth-helper
 make install         # builds ./ccauth into $GOBIN  (or `make build` for ./ccauth)
 ```
 
-Prebuilt, checksummed static binaries for macOS/Linux/Windows: `make package` → `dist/`.
+Or download a prebuilt, checksummed binary from the
+[releases page](https://github.com/PalenaAI/claude-code-auth-helper/releases).
 
 ## Quick start
 
@@ -87,7 +95,7 @@ Prefer to hand-edit? `ccauth init` writes a fully commented config; `ccauth wire
 | `ccauth status [--json]` | Show the active profile, config source, login state, and token expiry |
 | `ccauth wire [--write]` | Print (or merge) the `settings.json` wiring for a profile |
 | `ccauth config path\|show\|sync` | Inspect the config layers (user/embedded/managed/remote) or pull remote config |
-| `ccauth doctor [--probe]` | Diagnose config + session and print the gateway-side checklist |
+| `ccauth doctor [--probe]` | Diagnose config + session, check Claude Code's settings for anything that bypasses or blocks the helper, and print the gateway-side checklist |
 | `ccauth logout` | Delete the stored session for a profile |
 | `ccauth gateways` | List supported gateways and how each authenticates |
 
@@ -125,6 +133,8 @@ mode     = "passthrough"
   [profiles.work.gateway_opts]
   base_url  = "http://localhost:4000"
   ttl_ms    = 3000000
+  # haiku_model     = "<model id>"  # if the gateway doesn't serve Claude Code's default Haiku ID
+  # model_discovery = true          # let Claude Code list models via GET /v1/models
 ```
 
 `ccauth init` documents every provider/gateway combination. Env overrides for CI/headless: `CCAUTH_TENANT_ID`, `CCAUTH_CLIENT_ID`, `CCAUTH_CLIENT_SECRET`, `CCAUTH_ISSUER`, `CCAUTH_BASE_URL`.
@@ -162,6 +172,11 @@ ccauth config show     # merged config + per-profile source (secrets redacted)
 | `OIDC discovery … failed` | Bad issuer/tenant. Entra needs a **tenant GUID or verified domain**, not `common`. |
 | Google re-prompts weekly | Publish the OAuth consent screen — "Testing" apps get 7-day refresh tokens. |
 | Device flow blocked (Entra) | Conditional Access may block device-code. Use `flow = "auth_code"`. |
+| ccauth is never called | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY` or a `CLAUDE_CODE_USE_*` variable is set — they outrank `apiKeyHelper`. Unset them; `ccauth doctor` shows where they come from. |
+| Claude Code refuses `apiKeyHelper` at startup | Managed settings set `forceLoginMethod` / `forceLoginOrgUUID`. IT must remove them for gateway users. |
+| Helper in a repo's `.claude/settings.json` doesn't run | Claude Code runs project-level helpers only after you accept the workspace trust prompt. Prefer `ccauth wire --write` (user settings). |
+| Background tasks / haiku fail with "model not found" | The gateway doesn't serve Claude Code's default Haiku ID. Set `gateway_opts.haiku_model` and re-run `ccauth wire --write` (also migrates the deprecated `ANTHROPIC_SMALL_FAST_MODEL`). |
+| Gateway models missing from `/model` | Set `model_discovery = true`; the gateway must answer `GET /v1/models` with the same JWT, and IDs must contain `claude` or `anthropic`. Failures are silent — check `claude --debug`. |
 
 Run `ccauth doctor --probe` to exercise the whole path end-to-end (credential redacted).
 

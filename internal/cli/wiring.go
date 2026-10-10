@@ -31,6 +31,15 @@ func buildEnv(prof config.Profile) map[string]string {
 	if h := gateway.CustomHeaders(prof); h != "" {
 		env["ANTHROPIC_CUSTOM_HEADERS"] = h
 	}
+	if prof.GatewayOpts.Model != "" {
+		env["ANTHROPIC_MODEL"] = prof.GatewayOpts.Model
+	}
+	if prof.GatewayOpts.HaikuModel != "" {
+		env[envHaikuModel] = prof.GatewayOpts.HaikuModel
+	}
+	if prof.GatewayOpts.ModelDiscovery {
+		env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1"
+	}
 	return env
 }
 
@@ -57,18 +66,21 @@ func claudeSettingsPath() string {
 }
 
 // mergeClaudeSettings merges the profile's wiring into ~/.claude/settings.json,
-// preserving any other keys and env values already present.
-func mergeClaudeSettings(name string, prof config.Profile) error {
+// preserving any other keys and env values already present. A deprecated
+// ANTHROPIC_SMALL_FAST_MODEL is renamed to its replacement. The returned notes
+// describe that migration and any settings that would stop the helper from
+// being used; callers print them to stderr.
+func mergeClaudeSettings(name string, prof config.Profile) ([]string, error) {
 	path := claudeSettingsPath()
 	settings := map[string]any{}
 	if b, err := os.ReadFile(path); err == nil {
 		if len(b) > 0 {
 			if err := json.Unmarshal(b, &settings); err != nil {
-				return fmt.Errorf("existing %s is not valid JSON: %w", path, err)
+				return nil, fmt.Errorf("existing %s is not valid JSON: %w", path, err)
 			}
 		}
 	} else if !os.IsNotExist(err) {
-		return err
+		return nil, err
 	}
 
 	settings["apiKeyHelper"] = helperCommand(name)
@@ -79,16 +91,41 @@ func mergeClaudeSettings(name string, prof config.Profile) error {
 	for k, v := range buildEnv(prof) {
 		env[k] = v
 	}
+	notes := migrateEnv(env)
 	settings["env"] = env
+	for _, k := range shadowingCredentialVars {
+		if _, set := env[k]; set {
+			notes = append(notes, fmt.Sprintf("%s's env sets %s, which takes precedence over apiKeyHelper; remove it or ccauth will never be called", path, k))
+		}
+	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+		return nil, err
 	}
 	b, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	if err := os.WriteFile(path, append(b, '\n'), 0o644); err != nil {
+		return nil, err
+	}
+	return notes, nil
+}
+
+// migrateEnv renames the deprecated small/fast model variable in a settings env
+// block to ANTHROPIC_DEFAULT_HAIKU_MODEL, unless that is already set (then the
+// deprecated key is just dropped). It reports what it changed.
+func migrateEnv(env map[string]any) []string {
+	old, ok := env[envSmallFastModel]
+	if !ok {
+		return nil
+	}
+	delete(env, envSmallFastModel)
+	if _, set := env[envHaikuModel]; set {
+		return []string{fmt.Sprintf("removed deprecated %s (%s is already set)", envSmallFastModel, envHaikuModel)}
+	}
+	env[envHaikuModel] = old
+	return []string{fmt.Sprintf("renamed deprecated %s to %s", envSmallFastModel, envHaikuModel)}
 }
 
 // defaultBaseURL is the clean base URL suggestion for a gateway.

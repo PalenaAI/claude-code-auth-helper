@@ -82,8 +82,10 @@ CLAUDE_DIR="$SANDBOX/claude"; mkdir -p "$CLAUDE_DIR"
   printf '{\n  "apiKeyHelper": "%s token --profile test",\n  "env": {\n' "$CCAUTH"
   printf '    "ANTHROPIC_BASE_URL": "%s",\n' "$GATEWAY_URL"
   # Pin the model so Claude Code asks for one the gateway actually serves.
-  # Both point at MODEL — a single-model gateway has no separate small/fast model.
-  [ -n "$MODEL" ] && printf '    "ANTHROPIC_MODEL": "%s",\n    "ANTHROPIC_SMALL_FAST_MODEL": "%s",\n' "$MODEL" "$MODEL"
+  # Both point at MODEL — a single-model gateway has no separate Haiku model for
+  # background tasks (ANTHROPIC_DEFAULT_HAIKU_MODEL replaces the deprecated
+  # ANTHROPIC_SMALL_FAST_MODEL).
+  [ -n "$MODEL" ] && printf '    "ANTHROPIC_MODEL": "%s",\n    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "%s",\n' "$MODEL" "$MODEL"
   printf '    "CCAUTH_CONFIG_DIR": "%s",\n    "CCAUTH_STATE_DIR": "%s"\n  }\n}\n' "$CCAUTH_CONFIG_DIR" "$CCAUTH_STATE_DIR"
 } > "$CLAUDE_DIR/settings.json"
 

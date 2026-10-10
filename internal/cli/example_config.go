@@ -34,6 +34,11 @@ mode     = "passthrough"   # emit the raw IdP token; LiteLLM validates it via JW
   [profiles.entra-litellm.gateway_opts]
   base_url = "http://localhost:4000"   # proxy root; Claude Code appends /v1/messages
   ttl_ms   = 3000000                   # CLAUDE_CODE_API_KEY_HELPER_TTL_MS (~50 min)
+  # model           = "claude-sonnet-5-5"  # ANTHROPIC_MODEL: pin a model the gateway serves
+  # haiku_model     = "claude-haiku-5-5"   # ANTHROPIC_DEFAULT_HAIKU_MODEL: haiku alias + background
+  #                                        # tasks; set it if the gateway names Haiku differently
+  # model_discovery = true                 # CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: Claude Code
+  #                                        # calls GET /v1/models with the same token at startup
 
 # ---------------------------------------------------------------------------
 # Google Workspace  ->  Portkey (Enterprise JWT auth, passthrough)

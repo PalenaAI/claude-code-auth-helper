@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -81,15 +82,28 @@ func newDoctorCmd() *cobra.Command {
 			js, _ := settingsJSON(name, prof)
 			fmt.Fprintf(out, "\nClaude Code wiring for %s:\n%s\n", claudeSettingsPath(), js)
 
-			// 6. Gateway-side checklist.
-			if gi, found := gateway.Get(prof.Gateway); found && len(gi.SetupNotes) > 0 {
+			// 6. What Claude Code will actually use (file-based settings + env).
+			fmt.Fprintln(out, "\nClaude Code settings:")
+			cwd, _ := os.Getwd()
+			for _, f := range checkClaudeCode(loadClaudeLayers(claudeManagedDir(), cwd, claudeSettingsPath()), os.Getenv, name) {
+				if f.Status == "✗" || f.Status == "⚠" {
+					ok = false
+				}
+				line(f.Status, f.Msg)
+			}
+			if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+				line("•", "managed settings pushed as an MDM profile / registry policy are not inspected; check `/status` in Claude Code")
+			}
+
+			// 7. Gateway-side checklist.
+			if gi, found := gateway.Get(prof.Gateway); found && len(gi.Notes(prof)) > 0 {
 				fmt.Fprintf(out, "\nGateway-side setup for %s:\n", gi.Name)
-				for _, n := range gi.SetupNotes {
+				for _, n := range gi.Notes(prof) {
 					fmt.Fprintf(out, "  • %s\n", n)
 				}
 			}
 
-			// 7. Optional live probe.
+			// 8. Optional live probe.
 			if probe {
 				fmt.Fprintln(out)
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

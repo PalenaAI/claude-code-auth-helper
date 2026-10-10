@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `gateway_opts.model`, `haiku_model` and `model_discovery` emit
+  `ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` and
+  `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`; `setup` asks for the latter two,
+  and the gateway checklist covers what `GET /v1/models` needs per gateway.
+- `ccauth doctor` inspects Claude Code's managed (incl. `managed-settings.d/`),
+  project and user settings plus the environment, and flags credentials that
+  outrank `apiKeyHelper`, managed `forceLoginMethod`/`forceLoginOrgUUID` (which
+  block it), a missing/foreign helper, a missing `ANTHROPIC_BASE_URL`, and
+  project-level helpers that need workspace trust.
+
+### Changed
+
+- `wire --write` / `setup --write` rename the deprecated
+  `ANTHROPIC_SMALL_FAST_MODEL` to `ANTHROPIC_DEFAULT_HAIKU_MODEL` and warn when
+  the settings `env` holds a credential that would shadow the helper.
+- Docs updated for current Claude Code helper behavior (re-run on 401/403 and on
+  expired JWTs, slow-helper warning, credential precedence) and managed-settings
+  paths/drop-ins.
+
 ## [0.1.1] - 2026-07-10
 
 ### Added

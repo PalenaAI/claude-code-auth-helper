@@ -169,9 +169,43 @@ Any of these compose with the options above:
 - **MDM app deployment** of the static binary plus a separate managed-config
   profile.
 
-The Claude Code wiring itself can also be distributed centrally: Claude Code reads
-[managed settings](https://code.claude.com/docs/en/settings), so IT can push
-`apiKeyHelper` + `ANTHROPIC_BASE_URL` there. Or have `ccauth` write it locally:
+The Claude Code wiring itself can also be distributed centrally through Claude
+Code's [managed settings](https://code.claude.com/docs/en/managed-settings), which
+override user and project settings. Ship it as a **drop-in** so it merges with
+whatever else IT manages instead of replacing it:
+
+| OS | Drop-in path |
+|---|---|
+| macOS | `/Library/Application Support/ClaudeCode/managed-settings.d/50-ccauth.json` |
+| Linux / WSL | `/etc/claude-code/managed-settings.d/50-ccauth.json` |
+| Windows | `C:\Program Files\ClaudeCode\managed-settings.d\50-ccauth.json` |
+
+Drop-ins sit next to `managed-settings.json` and are merged with it. The legacy
+Windows path `C:\ProgramData\ClaudeCode\` is **no longer read**. The contents
+are exactly what `ccauth wire -p <profile>` prints:
+
+```json
+{
+  "apiKeyHelper": "ccauth token --profile corp",
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://llm-gateway.example.com",
+    "CLAUDE_CODE_API_KEY_HELPER_TTL_MS": "3000000"
+  }
+}
+```
+
+> **Do not set `forceLoginMethod` or `forceLoginOrgUUID`** in managed settings for
+> gateway users: Claude Code then refuses `apiKeyHelper` at startup. Also make sure
+> nothing exports `ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_API_KEY` (or a
+> `CLAUDE_CODE_USE_*` cloud-provider switch) — those outrank `apiKeyHelper` and it
+> is silently never called. `ccauth doctor` flags all of these in file-based
+> settings; for MDM-profile/registry delivery, check `/status` in Claude Code.
+
+Avoid putting `apiKeyHelper` in a repository's `.claude/settings.json`: Claude
+Code only runs a project-level helper after the user accepts the workspace trust
+prompt.
+
+Or have `ccauth` write the wiring locally:
 
 ```bash
 ccauth wire --write     # merges apiKeyHelper + env into ~/.claude/settings.json

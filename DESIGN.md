@@ -42,12 +42,23 @@ So an `apiKeyHelper` script is strictly the right mechanism: whatever the gatewa
 reads (`Authorization: Bearer` for JWT-validating gateways, `x-api-key` for
 key-based ones), the token arrives. It also refreshes automatically (see §2.2).
 
-### 2.2 The helper is re-invoked on a TTL **and** on HTTP 401
+### 2.2 The helper is re-invoked on a TTL, on HTTP 401/403, and on JWT expiry
 
 - Output is cached for **5 minutes** by default; override with
   `CLAUDE_CODE_API_KEY_HELPER_TTL_MS`.
-- It is re-run when a request returns **HTTP 401** (the backstop for expiry).
-- It must return in **< 10 s** (ideally < 2 s) or the UX degrades.
+- It is re-run when a request returns **HTTP 401 or 403** (the backstop for
+  expiry), and the request is retried.
+- Since Claude Code v2.1.246 it is also re-run **before** a request when the
+  cached output is a JWT whose `exp` has passed (only when `ANTHROPIC_AUTH_TOKEN`
+  is unset). Passthrough tokens are JWTs, so this catches expiry even without a 401.
+- A helper that takes **> 10 s** shows a slow-helper warning in Claude Code's
+  prompt bar; one that errors, times out, or prints nothing fails after three
+  attempts ("Your apiKeyHelper script is failing"). Aim for < 2 s.
+- stdout must be **only** the credential — Claude Code rejects output with
+  banners or log lines alongside the key.
+- `apiKeyHelper` is **4th** in Claude Code's credential precedence: cloud-provider
+  mode (`CLAUDE_CODE_USE_BEDROCK/VERTEX/FOUNDRY`), `ANTHROPIC_AUTH_TOKEN` and
+  `ANTHROPIC_API_KEY` all win over it, silently. `ccauth doctor` checks for them.
 
 The < 10 s budget shapes the architecture in §3: the helper does no terminal
 prompts and is **silent-first** — a cached read, then a silent refresh. Only when
@@ -112,7 +123,9 @@ Guardrails:
 - **One tab, not N.** A file lock (`store.AcquireLoginLock`) serializes concurrent
   helper invocations; the others wait and then read the freshly stored session.
 - **Bounded.** A 3-minute timeout means a stalled login fails cleanly rather than
-  hanging Claude Code.
+  hanging Claude Code. Claude Code applies its own (undocumented) helper timeout
+  and shows a slow-helper warning after 10 s; if it gives up first, the login
+  still completes in the browser and the next helper call returns the cached token.
 - **Environment-aware.** Disabled when no browser is reachable (SSH w/o X11, no
   display), when `flow = device_code`, or when `helper_interactive = false` /
   `CCAUTH_NONINTERACTIVE=1` / `CI=1` — then it falls back to the "run `ccauth
@@ -137,6 +150,13 @@ login" from other errors; the `token` command escalates on it.
 `x-api-key`; the JWT path reads `Authorization`, so passthrough works cleanly. If
 you use a LiteLLM **virtual key** instead of a JWT, put it in `x-litellm-api-key`
 via `ANTHROPIC_CUSTOM_HEADERS` to dodge the precedence entirely.
+
+**Model discovery (`/v1/models`):** LiteLLM allows it for JWT callers by default
+(`openai_routes`/`info_routes` in `team_allowed_routes` — keep them if you override
+the list); Portkey needs `completions.write` or `models.list` on the JWT and
+answers in OpenAI shape, which Claude Code accepts (it reads only `data[].id`);
+Bifrost serves `/anthropic/v1/models` with the same auth as inference, so the
+exchanged key or auth plugin must cover that route too.
 
 ---
 
@@ -181,8 +201,9 @@ The helper reads `CLAUDE_CODE_API_KEY_HELPER_TTL_MS` from its own environment
    browser login when allowed (§3.2), then retry once; otherwise (headless, or
    auto-reauth disabled) exit non-zero pointing at `ccauth login`.
 
-HTTP 401 from the gateway is the backstop: Claude Code re-invokes the helper,
-which refreshes.
+HTTP 401/403 from the gateway is the backstop: Claude Code re-invokes the helper,
+which refreshes. Claude Code ≥ v2.1.246 also re-invokes it when a cached JWT has
+expired, so the margin above is defense in depth rather than the only guard.
 
 ---
 
@@ -227,6 +248,16 @@ The Claude Code wiring a profile produces:
 
 The rotating token flows **only** through the helper (→ both auth headers). Static
 routing headers go in `ANTHROPIC_CUSTOM_HEADERS`.
+
+Optional `gateway_opts` add model wiring for gateways that don't serve Claude
+Code's default model IDs: `model` → `ANTHROPIC_MODEL`, `haiku_model` →
+`ANTHROPIC_DEFAULT_HAIKU_MODEL` (the haiku alias and background tasks; replaces
+the deprecated `ANTHROPIC_SMALL_FAST_MODEL`, which `wire --write` migrates), and
+`model_discovery = true` → `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`, which
+makes Claude Code call `GET <base>/v1/models?limit=1000` at startup with the same
+credential (both headers, v2.1.248+). Discovery keeps IDs containing `claude` or
+`anthropic`, does not follow redirects, and silently falls back to the cached or
+built-in list on failure (3 s timeout, `CLAUDE_CODE_GATEWAY_MODEL_DISCOVERY_TIMEOUT_MS`).
 
 ### 7.1 Layered configuration (enterprise / zero-config for users)
 
@@ -307,3 +338,7 @@ token choice). This keeps the flows uniform and the provider-specific surface ti
 - Claude Code's `apiKeyHelper` applies to the **CLI, VS Code extension, Agent SDK,
   and GitHub Actions** — **not** the Desktop app or cloud surfaces (Slack/web),
   which use different mechanisms.
+- Managed `forceLoginMethod` / `forceLoginOrgUUID` make Claude Code refuse
+  `apiKeyHelper` at startup; orgs using ccauth must not set them for gateway users.
+- An `apiKeyHelper` set in **project** settings runs only after the user accepts
+  Claude Code's workspace trust prompt; prefer user or managed settings.

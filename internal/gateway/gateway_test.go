@@ -41,3 +41,19 @@ func TestRegistryCoversAllGateways(t *testing.T) {
 		t.Error("LiteLLM should be marked NativeJWT=true")
 	}
 }
+
+func TestNotesAddDiscoveryOnlyWhenEnabled(t *testing.T) {
+	for _, gi := range All() {
+		off := gi.Notes(config.Profile{})
+		on := gi.Notes(config.Profile{GatewayOpts: config.GatewayOpts{ModelDiscovery: true}})
+		if len(off) != len(gi.SetupNotes) {
+			t.Errorf("%s: discovery notes leaked with discovery off", gi.Name)
+		}
+		if len(gi.DiscoveryNotes) == 0 {
+			t.Errorf("%s: missing DiscoveryNotes", gi.Name)
+		}
+		if len(on) != len(gi.SetupNotes)+len(gi.DiscoveryNotes)+1 {
+			t.Errorf("%s: want setup + discovery + common notes, got %d", gi.Name, len(on))
+		}
+	}
+}
