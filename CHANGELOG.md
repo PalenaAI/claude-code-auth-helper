@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-10
+
 ### Fixed
 
 - `brew install PalenaAI/tap/ccauth` no longer builds from source. Releases now
@@ -14,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   26 and 27; Linux x86_64/arm64), so installs no longer fail when the Command Line
   Tools don't match the installed macOS. A manual `release` workflow run with a
   tag rebuilds bottles for an existing release.
+- Removed the custom CodeQL workflow: GitHub's CodeQL default setup is enabled
+  for the repository (Go, GitHub Actions, Ruby) and rejects uploads from a second,
+  advanced configuration, so the workflow failed on every run.
 
 ## [0.1.2] - 2026-10-10
 
@@ -92,6 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Reference material:** `DESIGN.md`, `ENTERPRISE.md`, LiteLLM and Portkey
   examples, a Bifrost edge-auth plugin, and a token-exchange broker contract.
 
-[Unreleased]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/PalenaAI/claude-code-auth-helper/releases/tag/v0.1.0
