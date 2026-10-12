@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ccauth setup` no longer uses the literal placeholder `api://<gateway-app-id>/.default`
+  as the Entra scope when you press Enter. It now defaults to `<client-id>/.default`
+  (CLI app = gateway API) and re-asks until the scope is valid.
+- Entra profiles are checked for scopes Entra would reject only after the browser
+  round trip: placeholders, scopes without a resource such as a bare client ID
+  (AADSTS650053), and `api://<client-id>/…` for an app requesting a token for
+  itself (AADSTS90009). The error names the value to use.
+
 - Homebrew bottles are now actually used: the formula wrote the bottle cellar as
   a string (`cellar: "any_skip_relocation"`) instead of a symbol, so Homebrew
   treated every bottle as incompatible and still built from source.

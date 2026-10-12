@@ -26,7 +26,8 @@ mode     = "passthrough"   # emit the raw IdP token; LiteLLM validates it via JW
   [profiles.entra-litellm.oauth]
   tenant_id       = "00000000-0000-0000-0000-000000000000"  # your tenant GUID
   client_id       = "11111111-1111-1111-1111-111111111111"  # your CLI app registration
-  scopes          = ["api://<gateway-app-id>/.default"]      # audience the gateway checks
+  scopes          = ["api://<gateway-app-id>/.default"]      # audience the gateway checks; if the
+                                                             # CLI app IS the API: "<client-id>/.default"
   flow            = "auth_code"        # auth_code (browser) | device_code (headless)
   # redirect_host = "localhost"        # Entra loopback must be registered as http://localhost
   # credential_token = "access"        # Entra API tokens are access tokens

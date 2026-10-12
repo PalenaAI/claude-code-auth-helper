@@ -68,8 +68,19 @@ func newSetupCmd() *cobra.Command {
 			case "entra":
 				prof.OAuth.TenantID = ask(r, "Entra tenant ID (GUID or verified domain)", "")
 				prof.OAuth.ClientID = ask(r, "App registration (client) ID of your CLI app", "")
-				scope := ask(r, "API scope your gateway validates (aud)", "api://<gateway-app-id>/.default")
-				prof.OAuth.Scopes = []string{scope}
+				// Default to the single-app form (CLI app == gateway API), the setup in
+				// docs/identity-providers/entra-id.md. Re-ask until Entra would accept it.
+				fmt.Fprintln(os.Stderr, "  API scope (token audience): <client-id>/.default if the CLI app is also the gateway's API,")
+				fmt.Fprintln(os.Stderr, "  else api://<gateway-app-id>/.default for a separate gateway app.")
+				for {
+					scope := ask(r, "API scope your gateway validates (aud)", prof.OAuth.ClientID+"/.default")
+					if err := config.ValidateEntraScopes(prof.OAuth.ClientID, []string{scope}); err != nil {
+						fmt.Fprintf(os.Stderr, "  %v\n", err)
+						continue
+					}
+					prof.OAuth.Scopes = []string{scope}
+					break
+				}
 			case "google":
 				prof.OAuth.ClientID = ask(r, "OAuth client ID (Desktop app type)", "")
 				prof.OAuth.ClientSecret = ask(r, "OAuth client secret", "")

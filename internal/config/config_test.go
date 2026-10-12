@@ -3,7 +3,10 @@
 
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func base(p Profile) *Config {
 	return &Config{Profiles: map[string]Profile{"x": p}}
@@ -90,7 +93,7 @@ func TestResolveBifrostDefaultsToExchange(t *testing.T) {
 
 func TestValidateRejectsMissingRequiredFields(t *testing.T) {
 	cases := map[string]Profile{
-		"entra-no-tenant": {Provider: ProviderEntra, Gateway: GatewayLiteLLM, OAuth: OAuth{ClientID: "c", Scopes: []string{"s"}}},
+		"entra-no-tenant": {Provider: ProviderEntra, Gateway: GatewayLiteLLM, OAuth: OAuth{ClientID: "c", Scopes: []string{"c/.default"}}},
 		"entra-no-scope":  {Provider: ProviderEntra, Gateway: GatewayLiteLLM, OAuth: OAuth{ClientID: "c", TenantID: "t"}},
 		"no-client":       {Provider: ProviderGoogle, Gateway: GatewayLiteLLM, OAuth: OAuth{}},
 		"oidc-no-issuer":  {Provider: ProviderOIDC, Gateway: GatewayLiteLLM, OAuth: OAuth{ClientID: "c"}},
@@ -110,7 +113,7 @@ func TestEnvOverride(t *testing.T) {
 	c := base(Profile{
 		Provider: ProviderEntra,
 		Gateway:  GatewayLiteLLM,
-		OAuth:    OAuth{TenantID: "t", ClientID: "from-file", Scopes: []string{"s"}},
+		OAuth:    OAuth{TenantID: "t", ClientID: "from-file", Scopes: []string{"api://app/.default"}},
 	})
 	p, err := c.Resolve("x")
 	if err != nil {
@@ -118,5 +121,48 @@ func TestEnvOverride(t *testing.T) {
 	}
 	if p.OAuth.ClientID != "from-env" {
 		t.Errorf("client_id = %q, want from-env override", p.OAuth.ClientID)
+	}
+}
+
+func TestValidateEntraScopes(t *testing.T) {
+	const cid = "46ad0f8f-f5e7-457f-841a-af0cbe689a04"
+	tests := []struct {
+		name    string
+		scopes  []string
+		wantErr string // substring; empty = valid
+	}{
+		{"single app GUID form", []string{cid + "/.default"}, ""},
+		{"separate gateway app", []string{"api://gateway-api/.default"}, ""},
+		{"named scope on gateway app", []string{"api://11111111-2222-3333-4444-555555555555/access_as_user"}, ""},
+		{"with OIDC scopes", []string{"openid", "profile", "email", "offline_access", cid + "/.default"}, ""},
+		{"bare client id", []string{cid}, "AADSTS650053"},
+		{"bare name", []string{"access_as_user"}, "Microsoft Graph"},
+		{"api uri for itself", []string{"api://" + cid + "/.default"}, "AADSTS90009"},
+		{"api uri for itself, other case", []string{"API://" + strings.ToUpper(cid) + "/access_as_user"}, "GUID form"},
+		{"wizard placeholder", []string{"api://<gateway-app-id>/.default"}, "placeholder"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateEntraScopes(cid, tc.scopes)
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Errorf("unexpected error: %v", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Errorf("error = %v, want one containing %q", err, tc.wantErr)
+			case tc.wantErr != "" && !strings.Contains(err.Error(), "/.default"):
+				t.Errorf("error should name the value to use: %v", err)
+			}
+		})
+	}
+}
+
+func TestResolveRejectsBadEntraScope(t *testing.T) {
+	c := base(Profile{
+		Provider: ProviderEntra,
+		Gateway:  GatewayLiteLLM,
+		OAuth:    OAuth{TenantID: "tid", ClientID: "cid", Scopes: []string{"cid"}},
+	})
+	if _, err := c.Resolve("x"); err == nil || !strings.Contains(err.Error(), `"cid/.default"`) {
+		t.Errorf("Resolve error = %v, want the cid/.default suggestion", err)
 	}
 }

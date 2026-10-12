@@ -87,7 +87,7 @@ gateway  = "litellm"
   [profiles.corp.oauth]
   tenant_id = "t"
   client_id = "c"
-  scopes    = ["s"]
+  scopes    = ["api://app/.default"]
 `)
 	writeFile(t, filepath.Join(userDir, "config.toml"), `
 [profiles.mine]
@@ -112,7 +112,7 @@ gateway  = "litellm"
 func TestInteractiveHelperDefaultAndOverride(t *testing.T) {
 	p, err := base(Profile{
 		Provider: ProviderEntra, Gateway: GatewayLiteLLM,
-		OAuth: OAuth{TenantID: "t", ClientID: "c", Scopes: []string{"s"}},
+		OAuth: OAuth{TenantID: "t", ClientID: "c", Scopes: []string{"api://app/.default"}},
 	}).Resolve("x")
 	if err != nil {
 		t.Fatal(err)
@@ -124,7 +124,7 @@ func TestInteractiveHelperDefaultAndOverride(t *testing.T) {
 	no := false
 	p2, err := base(Profile{
 		Provider: ProviderEntra, Gateway: GatewayLiteLLM, HelperInteractive: &no,
-		OAuth: OAuth{TenantID: "t", ClientID: "c", Scopes: []string{"s"}},
+		OAuth: OAuth{TenantID: "t", ClientID: "c", Scopes: []string{"api://app/.default"}},
 	}).Resolve("x")
 	if err != nil {
 		t.Fatal(err)

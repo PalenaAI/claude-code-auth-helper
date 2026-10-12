@@ -470,6 +470,34 @@ func (p *Profile) applyPresets() error {
 	return nil
 }
 
+// oidcScopes are the standard OpenID Connect scopes Entra accepts without a
+// resource prefix.
+var oidcScopes = map[string]bool{"openid": true, "profile": true, "email": true, "offline_access": true}
+
+// ValidateEntraScopes catches the scope mistakes Entra only reports after a
+// browser round trip, and names the value to use instead:
+//   - a placeholder left from the example config or the setup prompt;
+//   - a scope without a resource (e.g. a bare client ID), which Entra treats as a
+//     Microsoft Graph permission (AADSTS650053);
+//   - api://<client-id>/… for an app requesting a token for itself, which Entra
+//     only accepts in the GUID form <client-id>/.default (AADSTS90009).
+func ValidateEntraScopes(clientID string, scopes []string) error {
+	selfScope := clientID + "/.default"
+	for _, raw := range scopes {
+		s := strings.TrimSpace(raw)
+		switch {
+		case oidcScopes[s]:
+		case strings.ContainsAny(s, "<>"):
+			return fmt.Errorf("oauth.scopes contains the placeholder %q: use %q when the CLI app is also the gateway's API, else \"api://<gateway-app-id>/.default\" with the real ID", s, selfScope)
+		case !strings.Contains(s, "/"):
+			return fmt.Errorf("oauth.scopes entry %q has no resource, so Entra would treat it as a Microsoft Graph permission (AADSTS650053): use %q", s, s+"/.default")
+		case clientID != "" && strings.HasPrefix(strings.ToLower(s), "api://"+strings.ToLower(clientID)+"/"):
+			return fmt.Errorf("oauth.scopes entry %q requests a token for the CLI app itself, which Entra only accepts in the GUID form (AADSTS90009): use %q", s, selfScope)
+		}
+	}
+	return nil
+}
+
 func (p *Profile) validate() error {
 	if p.OAuth.ClientID == "" {
 		return fmt.Errorf("oauth.client_id is required")
@@ -480,7 +508,10 @@ func (p *Profile) validate() error {
 			return fmt.Errorf("oauth.tenant_id is required for Entra")
 		}
 		if len(p.OAuth.Scopes) == 0 {
-			return fmt.Errorf("oauth.scopes is required for Entra (e.g. \"api://<gateway-app-id>/.default\")")
+			return fmt.Errorf("oauth.scopes is required for Entra: %q when the CLI app is also the gateway's API, else \"api://<gateway-app-id>/.default\"", p.OAuth.ClientID+"/.default")
+		}
+		if err := ValidateEntraScopes(p.OAuth.ClientID, p.OAuth.Scopes); err != nil {
+			return err
 		}
 	case ProviderOIDC:
 		if p.OAuth.Issuer == "" {

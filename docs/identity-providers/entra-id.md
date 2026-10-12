@@ -171,6 +171,7 @@ for any OIDC gateway, point it at the JWKS URL and set the issuer + audience.
 |---|---|
 | `AADSTS50011` redirect URI does not match | Register **`http://localhost:8765/callback`** (with the `/callback` path) and set `redirect_port = 8765` in the profile. Entra ignores the port but **not** the path, and `ccauth` uses a random port unless you pin it — so bare `http://localhost` or a stale-port entry won't match. Also confirm "Allow public client flows" = Yes. |
 | `ccauth login` errors with `invalid_scope` / `AADSTS65001` | The app isn't consented to its own API — do Part A step 4 (add the scope under *My APIs* and grant admin consent). |
+| `AADSTS650053` "asked for scope '<GUID>' that doesn't exist on the resource '00000003-…'" | The scope has no resource part (e.g. the bare client ID), so Entra looked it up on Microsoft Graph. Add `/.default`: `<client-id>/.default`. |
 | `AADSTS90009` "Application … is requesting a token for itself … GUID based App Identifier" | Single app (client == API). Use the **GUID form** in `scopes`: `<client-id>/.default`, **not** `api://<client-id>/.default`. |
 | Gateway returns `401`, token looks valid | `aud`/`iss` mismatch. Decode the token (Part B) and set the gateway's `JWT_AUDIENCE`/`JWT_ISSUER` to the **exact** values in the token. Remember v1 vs v2 `aud` format (Part A step 5). |
 | Device-code login blocked | Conditional Access can block device code; use `flow = "auth_code"`. |
