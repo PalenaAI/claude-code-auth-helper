@@ -25,15 +25,20 @@ fi
 repo=${GITHUB_REPOSITORY:-PalenaAI/claude-code-auth-helper}
 here=$(cd "$(dirname "$0")" && pwd)
 version=${tag#v}
-sha=$(curl -fsSL "https://github.com/${repo}/archive/refs/tags/${tag}.tar.gz" | shasum -a 256 | cut -d' ' -f1)
+# SOURCE_SHA256 skips the download (used by render-formula_test.sh).
+sha=${SOURCE_SHA256:-$(curl -fsSL "https://github.com/${repo}/archive/refs/tags/${tag}.tar.gz" | shasum -a 256 | cut -d' ' -f1)}
 
 bottle=""
 if [ "$#" -gt 0 ]; then
   # One `sha256 cellar: …, <tag>: "…"` line per bottle, laid out the way
   # `brew bottle --merge` writes them (brew style checks both): ARM macOS, Intel
   # macOS, ARM Linux, Intel Linux, with tags and digests aligned in columns.
-  lines=$(jq -r '.[] | .bottle as $b | $b.tags | to_entries[] |
-      [(if ($b.cellar | startswith(":")) then $b.cellar else ($b.cellar | tojson) end), .key, .value.sha256] | @tsv' "$@" |
+  # The JSON spells relocatable cellars as bare words ("any_skip_relocation");
+  # they must become Ruby symbols. A quoted string means a literal Cellar path,
+  # which doesn't match the user's prefix, so Homebrew would ignore the bottle and
+  # build from source.
+  lines=$(jq -r '.[] | .bottle as $b | ($b.cellar | ltrimstr(":")) as $c | $b.tags | to_entries[] |
+      [(if ($c == "any" or $c == "any_skip_relocation") then ":" + $c else ($c | tojson) end), .key, .value.sha256] | @tsv' "$@" |
     awk -F'\t' '
       { rank = ($2 ~ /linux/ ? 2 : 0) + ($2 ~ /^arm64_/ ? 0 : 1)
         n++; c[n] = "cellar: " $1 ","; t[n] = $2 ":"; d[n] = $3; r[n] = rank

@@ -36,6 +36,8 @@ jobs:
         run: go build ./...
       - name: test
         run: go test -race ./...
+      - name: test Homebrew formula rendering
+        run: make test-packaging
 
   fuzz:
     runs-on: ubuntu-latest

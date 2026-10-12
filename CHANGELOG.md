@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Homebrew bottles are now actually used: the formula wrote the bottle cellar as
+  a string (`cellar: "any_skip_relocation"`) instead of a symbol, so Homebrew
+  treated every bottle as incompatible and still built from source.
+- The release no longer tries to build an Intel macOS bottle. Homebrew dropped
+  macOS x86_64 to Tier 3 in September 2026 and refuses to build the Go
+  dependency there; Intel Macs can use the `ccauth-darwin-amd64` release binary.
+
 ## [0.1.3] - 2026-10-10
 
 ### Fixed

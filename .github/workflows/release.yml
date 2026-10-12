@@ -80,7 +80,9 @@ jobs:
   # bottle, `brew install` pours a prebuilt binary and skips its build-from-source
   # checks, which fail when the user's Command Line Tools don't match their macOS.
   # Homebrew pours a bottle built on an older macOS on newer ones, so the macOS 15
-  # bottles cover macOS 15, 26 and 27.
+  # bottle covers macOS 15, 26 and 27. There is no Intel macOS bottle: Homebrew
+  # moved macOS x86_64 to Tier 3 in September 2026 and refuses to build the Go
+  # dependency there (Intel Macs can use the ccauth-darwin-amd64 release binary).
   bottles:
     needs: release
     if: ${{ !cancelled() && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
@@ -89,7 +91,6 @@ jobs:
       matrix:
         runner:
           - macos-15          # arm64_sequoia (Apple silicon)
-          - macos-15-intel    # sequoia (Intel)
           - ubuntu-24.04      # x86_64_linux
           - ubuntu-24.04-arm  # arm64_linux
     runs-on: ${{ matrix.runner }}
@@ -181,8 +182,8 @@ jobs:
           shopt -s nullglob
           jsons=(bottles/*.json)
           echo "Bottles: ${#jsons[@]}"
-          if [ "${#jsons[@]}" -lt 4 ]; then
-            echo "::warning::only ${#jsons[@]} of 4 bottles were built; the others fall back to a source build"
+          if [ "${#jsons[@]}" -lt 3 ]; then
+            echo "::warning::only ${#jsons[@]} of 3 bottles were built; the others fall back to a source build"
           fi
           git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/PalenaAI/homebrew-tap.git" tap
           mkdir -p tap/Formula
