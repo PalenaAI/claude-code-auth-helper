@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-12
+
 ### Fixed
 
 - The Entra guide and `ccauth setup` now point to `http://localhost/callback` as the
@@ -14,7 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   callback port matches without pinning. `setup` prints the URI to register and asks
   for an optional fixed port (needed only for port forwarding such as devcontainers);
   `doctor` shows the URI too.
-
 - `ccauth setup` no longer uses the literal placeholder `api://<gateway-app-id>/.default`
   as the Entra scope when you press Enter. It now defaults to `<client-id>/.default`
   (CLI app = gateway API) and re-asks until the scope is valid.
@@ -22,7 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   round trip: placeholders, scopes without a resource such as a bare client ID
   (AADSTS650053), and `api://<client-id>/…` for an app requesting a token for
   itself (AADSTS90009). The error names the value to use.
-
 - Homebrew bottles are now actually used: the formula wrote the bottle cellar as
   a string (`cellar: "any_skip_relocation"`) instead of a symbol, so Homebrew
   treated every bottle as incompatible and still built from source.
@@ -120,7 +120,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Reference material:** `DESIGN.md`, `ENTERPRISE.md`, LiteLLM and Portkey
   examples, a Bifrost edge-auth plugin, and a token-exchange broker contract.
 
-[Unreleased]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.0...v0.1.1
