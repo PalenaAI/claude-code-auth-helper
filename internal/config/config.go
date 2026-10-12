@@ -529,6 +529,30 @@ func (p *Profile) validate() error {
 	return nil
 }
 
+// CallbackPath is the loopback path the auth-code flow listens on.
+const CallbackPath = "/callback"
+
+// RedirectURIToRegister returns the redirect URI to add to the IdP app
+// registration for the auth-code flow, and whether the port is part of it.
+//
+// Entra ignores the port of localhost redirect URIs when matching (RFC 8252
+// §7.3), so http://localhost/callback covers the random port ccauth picks by
+// default; only the path must match. Other IdPs may compare ports exactly, so
+// they need redirect_port pinned to the registered value.
+func (p Profile) RedirectURIToRegister() (uri string, portMatters bool) {
+	host := p.OAuth.RedirectHost
+	if host == "" {
+		host = "localhost"
+	}
+	if p.Provider == ProviderEntra {
+		return "http://" + host + CallbackPath, false
+	}
+	if p.OAuth.RedirectPort > 0 {
+		return fmt.Sprintf("http://%s:%d%s", host, p.OAuth.RedirectPort, CallbackPath), true
+	}
+	return "http://" + host + ":<port>" + CallbackPath, true
+}
+
 // Issuer returns the OIDC issuer URL for the profile's provider.
 func (p Profile) Issuer() string {
 	switch p.Provider {

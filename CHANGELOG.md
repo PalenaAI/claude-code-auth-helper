@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Entra guide and `ccauth setup` now point to `http://localhost/callback` as the
+  redirect URI. Entra ignores the port of localhost redirect URIs, so ccauth's random
+  callback port matches without pinning. `setup` prints the URI to register and asks
+  for an optional fixed port (needed only for port forwarding such as devcontainers);
+  `doctor` shows the URI too.
+
 - `ccauth setup` no longer uses the literal placeholder `api://<gateway-app-id>/.default`
   as the Entra scope when you press Enter. It now defaults to `<client-id>/.default`
   (CLI app = gateway API) and re-asks until the scope is valid.

@@ -34,10 +34,12 @@ From the **Overview** page, copy these — you'll need them later:
 
 **Authentication → Add a platform → Mobile and desktop applications.**
 
-- Add the redirect URI **`http://localhost:8765/callback`**. Entra ignores the
-  *port* for loopback URIs but the **path must match** `ccauth`'s `/callback` — so a
-  bare `http://localhost` does **not** work. Pin the matching port in the profile
-  (`redirect_port = 8765`, Part B) so the request and the registration match exactly.
+- Add the redirect URI **`http://localhost/callback`**. Entra
+  [ignores the port](https://learn.microsoft.com/en-us/entra/identity-platform/reply-url#localhost-exceptions)
+  of localhost redirect URIs, so this one entry matches the random port `ccauth`
+  listens on. The **path must match** `ccauth`'s `/callback` (case-sensitive), so a
+  bare `http://localhost` does **not** work. Don't add several localhost entries
+  that differ only by port. `ccauth doctor` prints the exact URI to register.
 - **Save.**
 
 Then, still under **Authentication → Advanced settings**, set
@@ -111,7 +113,7 @@ mode     = "passthrough"
   # Single app (client == API): use the GUID form, NOT api://… (see note below).
   scopes        = ["<Application (client) ID>/.default"]   # e.g. e1e96c7a-…/.default
   flow          = "auth_code"        # use "device_code" for headless/SSH
-  redirect_port = 8765               # must match the registered http://localhost:8765/callback
+  # redirect_port = 8765             # optional: only for port forwarding (devcontainers, SSH)
 
   [profiles.entra.gateway_opts]
   base_url = "http://localhost:4000"
@@ -169,7 +171,7 @@ for any OIDC gateway, point it at the JWKS URL and set the issuer + audience.
 
 | Symptom | Cause / fix |
 |---|---|
-| `AADSTS50011` redirect URI does not match | Register **`http://localhost:8765/callback`** (with the `/callback` path) and set `redirect_port = 8765` in the profile. Entra ignores the port but **not** the path, and `ccauth` uses a random port unless you pin it — so bare `http://localhost` or a stale-port entry won't match. Also confirm "Allow public client flows" = Yes. |
+| `AADSTS50011` redirect URI does not match | Register **`http://localhost/callback`** under *Mobile and desktop applications*. Entra ignores the port of localhost URIs but **not** the path, so the random port is fine while a bare `http://localhost` or a different path won't match. Also confirm "Allow public client flows" = Yes. |
 | `ccauth login` errors with `invalid_scope` / `AADSTS65001` | The app isn't consented to its own API — do Part A step 4 (add the scope under *My APIs* and grant admin consent). |
 | `AADSTS650053` "asked for scope '<GUID>' that doesn't exist on the resource '00000003-…'" | The scope has no resource part (e.g. the bare client ID), so Entra looked it up on Microsoft Graph. Add `/.default`: `<client-id>/.default`. |
 | `AADSTS90009` "Application … is requesting a token for itself … GUID based App Identifier" | Single app (client == API). Use the **GUID form** in `scopes`: `<client-id>/.default`, **not** `api://<client-id>/.default`. |

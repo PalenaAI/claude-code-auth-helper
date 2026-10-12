@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
+
+	"github.com/PalenaAI/claude-code-auth-helper/internal/config"
 )
 
 // loginTimeout bounds how long we wait for the user to complete a browser login.
@@ -32,7 +34,7 @@ func (f *flow) authCodeLogin(ctx context.Context) (*oauth2.Token, error) {
 	defer ln.Close()
 
 	port := ln.Addr().(*net.TCPAddr).Port
-	f.conf.RedirectURL = fmt.Sprintf("http://%s:%d/callback", f.prof.OAuth.RedirectHost, port)
+	f.conf.RedirectURL = fmt.Sprintf("http://%s:%d%s", f.prof.OAuth.RedirectHost, port, config.CallbackPath)
 
 	verifier := oauth2.GenerateVerifier()
 	state, err := randToken()

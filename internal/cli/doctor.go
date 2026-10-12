@@ -46,6 +46,14 @@ func newDoctorCmd() *cobra.Command {
 			line("✓", fmt.Sprintf("profile %q: %s → %s (%s mode, emits %s token)",
 				name, prof.Provider, prof.Gateway, prof.Mode, prof.OAuth.Credential))
 			line("•", "issuer: "+prof.Issuer())
+			if prof.OAuth.Flow == config.FlowAuthCode {
+				uri, portMatters := prof.RedirectURIToRegister()
+				note := " (Entra ignores the port; the /callback path must match)"
+				if portMatters {
+					note = " (port must match; pin it with oauth.redirect_port)"
+				}
+				line("•", "redirect URI to register: "+uri+note)
+			}
 			if c, e := config.Load(); e == nil && c.Sources[name] != "" {
 				line("•", "config source: "+c.Sources[name]+" layer")
 			}

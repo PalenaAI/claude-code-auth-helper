@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -95,6 +96,22 @@ func newSetupCmd() *cobra.Command {
 			}
 
 			prof.OAuth.Flow = config.Flow(askChoice(r, "Login flow", []string{"auth_code", "device_code"}, "auth_code"))
+			if prof.OAuth.Flow == config.FlowAuthCode {
+				// A fixed port is only needed when something forwards it (devcontainers,
+				// SSH) or the IdP compares ports exactly; Entra ignores it.
+				if p := ask(r, "Fixed callback port (blank = random; set one for devcontainers or IdPs that match ports)", ""); p != "" {
+					port, err := strconv.Atoi(p)
+					if err != nil || port < 1 || port > 65535 {
+						return fmt.Errorf("callback port %q: want a number between 1 and 65535", p)
+					}
+					prof.OAuth.RedirectPort = port
+				}
+				uri, portMatters := prof.RedirectURIToRegister()
+				fmt.Fprintf(os.Stderr, "  Register this redirect URI in your IdP app (platform: Mobile and desktop applications on Entra): %s\n", uri)
+				if !portMatters {
+					fmt.Fprintln(os.Stderr, "  Entra ignores the port of localhost redirect URIs, so any port matches; only the /callback path must.")
+				}
+			}
 
 			// Let the helper re-open a browser automatically when the session
 			// expires, so users don't have to drop to a terminal mid-session.

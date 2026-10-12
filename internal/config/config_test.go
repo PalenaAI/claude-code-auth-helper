@@ -166,3 +166,26 @@ func TestResolveRejectsBadEntraScope(t *testing.T) {
 		t.Errorf("Resolve error = %v, want the cid/.default suggestion", err)
 	}
 }
+
+func TestRedirectURIToRegister(t *testing.T) {
+	tests := []struct {
+		name        string
+		prof        Profile
+		want        string
+		portMatters bool
+	}{
+		{"entra random port", Profile{Provider: ProviderEntra}, "http://localhost/callback", false},
+		{"entra pinned port is still ignored", Profile{Provider: ProviderEntra, OAuth: OAuth{RedirectPort: 8765}}, "http://localhost/callback", false},
+		{"oidc pinned port", Profile{Provider: ProviderOIDC, OAuth: OAuth{RedirectPort: 8765}}, "http://localhost:8765/callback", true},
+		{"oidc random port", Profile{Provider: ProviderOIDC}, "http://localhost:<port>/callback", true},
+		{"custom host", Profile{Provider: ProviderEntra, OAuth: OAuth{RedirectHost: "127.0.0.1"}}, "http://127.0.0.1/callback", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, pm := tc.prof.RedirectURIToRegister()
+			if got != tc.want || pm != tc.portMatters {
+				t.Errorf("RedirectURIToRegister() = %q, %v; want %q, %v", got, pm, tc.want, tc.portMatters)
+			}
+		})
+	}
+}

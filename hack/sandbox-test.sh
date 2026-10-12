@@ -20,7 +20,7 @@ set -uo pipefail
 : "${TENANT_ID:?set TENANT_ID}"; : "${CLIENT_ID:?set CLIENT_ID}"
 : "${API_SCOPE:?set API_SCOPE}"; : "${GATEWAY_URL:?set GATEWAY_URL}"
 MODEL="${MODEL:-}"
-REDIRECT_PORT="${REDIRECT_PORT:-8765}"   # pinned loopback port — register http://localhost:<port>/callback in your IdP
+REDIRECT_PORT="${REDIRECT_PORT:-8765}"   # pinned loopback port; Entra ignores it, so register http://localhost/callback
 CCAUTH="${CCAUTH:-$(cd "$(dirname "$0")/.." && pwd)/ccauth}"
 
 SANDBOX="${SANDBOX:-$(mktemp -d -t ccauth-sandbox.XXXX)}"
