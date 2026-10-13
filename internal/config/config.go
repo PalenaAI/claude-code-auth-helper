@@ -470,6 +470,36 @@ func (p *Profile) applyPresets() error {
 	return nil
 }
 
+// reservedHeaders can't be set as custom gateway headers: Claude Code sends the
+// apiKeyHelper credential in Authorization and x-api-key, and a custom header
+// with the same name would replace it.
+var reservedHeaders = map[string]bool{
+	"authorization": true, "x-api-key": true, "host": true, "content-length": true,
+	"content-type": true, "anthropic-version": true, "anthropic-beta": true,
+}
+
+// ValidateHeader checks one custom header destined for ANTHROPIC_CUSTOM_HEADERS.
+// Claude Code reads that variable as newline-separated "Name: value" lines, so a
+// line break in a value would smuggle in another header; names must be HTTP
+// tokens.
+func ValidateHeader(name, value string) error {
+	if name == "" {
+		return fmt.Errorf("custom header has an empty name")
+	}
+	for _, r := range name {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("!#$%&'*+-.^_`|~", r)) {
+			return fmt.Errorf("custom header name %q: only letters, digits and !#$%%&'*+-.^_`|~ are allowed", name)
+		}
+	}
+	if reservedHeaders[strings.ToLower(name)] {
+		return fmt.Errorf("custom header %q is reserved: Claude Code sets it itself (the apiKeyHelper credential travels in Authorization and x-api-key)", name)
+	}
+	if strings.ContainsAny(value, "\r\n") {
+		return fmt.Errorf("custom header %q: the value must not contain a line break", name)
+	}
+	return nil
+}
+
 // oidcScopes are the standard OpenID Connect scopes Entra accepts without a
 // resource prefix.
 var oidcScopes = map[string]bool{"openid": true, "profile": true, "email": true, "offline_access": true}
@@ -522,6 +552,11 @@ func (p *Profile) validate() error {
 	case GatewayLiteLLM, GatewayPortkey, GatewayBifrost, GatewayGeneric:
 	default:
 		return fmt.Errorf("unknown gateway %q", p.Gateway)
+	}
+	for k, v := range p.GatewayOpts.Headers {
+		if err := ValidateHeader(k, v); err != nil {
+			return fmt.Errorf("gateway_opts.headers: %w", err)
+		}
 	}
 	if p.Mode == ModeExchange && p.Exchange.TokenURL == "" {
 		return fmt.Errorf("exchange.token_url is required when mode = exchange")

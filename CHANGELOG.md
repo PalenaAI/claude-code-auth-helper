@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ccauth claude [-H "Name: value"] [--isolated] [-- claude-flags]` starts Claude
+  Code on the gateway for one session through `claude --settings`, without
+  touching settings files, so plain `claude` keeps your personal subscription.
+  It unsets credentials that would outrank the helper for that session;
+  `--isolated` uses a separate Claude Code config dir per profile.
+- `ccauth wire --project` wires only the current repository
+  (`.claude/settings.local.json` at the repo root, never committed);
+  `ccauth unwire [--project]` removes exactly what ccauth wrote and keeps the rest.
+- Extra gateway headers: `-H` on `claude`/`wire` for per-session or per-repo
+  headers (overrides a profile header of the same name), and `setup` now asks
+  for static headers for every gateway.
+- `ccauth doctor` reports which credential Claude Code uses in the current
+  directory (`claude auth status`).
+
+### Changed
+
+- `ccauth setup` asks where to use the profile (launcher, this repository, or
+  every session) instead of only offering global wiring; `--write` still means
+  every session.
+- Custom headers are validated: HTTP-token names, no line breaks in values, and
+  no `Authorization`/`x-api-key` or Claude Code protocol headers.
+- `doctor` no longer warns when no settings file has an `apiKeyHelper`, since
+  launcher users don't need one.
+
 ## [0.1.4] - 2026-10-12
 
 ### Fixed

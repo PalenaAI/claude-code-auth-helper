@@ -28,8 +28,11 @@ Typical flow:
   ccauth login      # interactive browser/device sign-in, stores a refresh token
   ccauth token      # what Claude Code calls; prints the current credential
 
-Point Claude Code at it in ~/.claude/settings.json:
-  { "apiKeyHelper": "ccauth token --profile <name>" }`,
+Use it from Claude Code in one of three ways:
+  ccauth claude -p <name>          # one session on the gateway; settings files untouched
+  ccauth wire --project -p <name>  # this repo only (.claude/settings.local.json)
+  ccauth wire --write -p <name>    # every session (~/.claude/settings.json)
+` + "`ccauth unwire`" + ` removes what ccauth wrote.`,
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -45,6 +48,8 @@ Point Claude Code at it in ~/.claude/settings.json:
 		newLogoutCmd(),
 		newStatusCmd(),
 		newWireCmd(),
+		newUnwireCmd(),
+		newClaudeCmd(),
 		newConfigCmd(),
 		newDoctorCmd(),
 		newGatewaysCmd(),

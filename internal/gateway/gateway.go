@@ -124,20 +124,45 @@ func (i Info) Notes(p config.Profile) []string {
 	return notes
 }
 
-// CustomHeaders renders a profile's static routing headers into the
-// ANTHROPIC_CUSTOM_HEADERS value ("Name: Value" pairs joined by \n).
-func CustomHeaders(p config.Profile) string {
-	if len(p.GatewayOpts.Headers) == 0 {
+// Header is one extra gateway header, e.g. from `ccauth claude -H`.
+type Header struct{ Name, Value string }
+
+// ParseHeader parses a "Name: value" argument and validates it.
+func ParseHeader(s string) (Header, error) {
+	name, value, ok := strings.Cut(s, ":")
+	if !ok {
+		return Header{}, fmt.Errorf("header %q: want \"Name: value\"", s)
+	}
+	h := Header{Name: strings.TrimSpace(name), Value: strings.TrimSpace(value)}
+	if err := config.ValidateHeader(h.Name, h.Value); err != nil {
+		return Header{}, err
+	}
+	return h, nil
+}
+
+// CustomHeaders renders a profile's static routing headers, plus any extra
+// per-session headers, into the ANTHROPIC_CUSTOM_HEADERS value ("Name: Value"
+// lines joined by \n). An extra header replaces a profile header with the same
+// name (case-insensitively); the output is sorted for stable diffs.
+func CustomHeaders(p config.Profile, extra ...Header) string {
+	merged := map[string]Header{}
+	for k, v := range p.GatewayOpts.Headers {
+		merged[strings.ToLower(k)] = Header{k, v}
+	}
+	for _, h := range extra {
+		merged[strings.ToLower(h.Name)] = h
+	}
+	if len(merged) == 0 {
 		return ""
 	}
-	keys := make([]string, 0, len(p.GatewayOpts.Headers))
-	for k := range p.GatewayOpts.Headers {
+	keys := make([]string, 0, len(merged))
+	for k := range merged {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
-		parts = append(parts, fmt.Sprintf("%s: %s", k, p.GatewayOpts.Headers[k]))
+		parts = append(parts, fmt.Sprintf("%s: %s", merged[k].Name, merged[k].Value))
 	}
 	return strings.Join(parts, "\n")
 }

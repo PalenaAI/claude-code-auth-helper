@@ -4,9 +4,11 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -161,7 +163,7 @@ func checkClaudeCode(layers []claudeLayer, getenv func(string) string, profile s
 	}
 	switch {
 	case helper == nil:
-		add("⚠", "no apiKeyHelper in any Claude Code settings file — run `ccauth wire --write`")
+		add("•", "no apiKeyHelper in Claude Code settings files: fine if you start gateway sessions with `ccauth claude -p %s`; otherwise `ccauth wire --project` (this repo) or `--write` (all sessions)", profile)
 	default:
 		cmd := helper.str("apiKeyHelper")
 		switch {
@@ -178,7 +180,7 @@ func checkClaudeCode(layers []claudeLayer, getenv func(string) string, profile s
 	}
 
 	// Base URL: without one, the gateway token would be sent to Anthropic.
-	if getenv("ANTHROPIC_BASE_URL") == "" && !anyLayerEnv(layers, "ANTHROPIC_BASE_URL") {
+	if helper != nil && getenv("ANTHROPIC_BASE_URL") == "" && !anyLayerEnv(layers, "ANTHROPIC_BASE_URL") {
 		add("⚠", "ANTHROPIC_BASE_URL is not set anywhere — Claude Code would call api.anthropic.com instead of your gateway")
 	}
 
@@ -192,16 +194,8 @@ func checkClaudeCode(layers []claudeLayer, getenv func(string) string, profile s
 // helperUsesProfile reports whether an apiKeyHelper command selects profile.
 // A helper without --profile/-p uses the default profile, which is accepted.
 func helperUsesProfile(cmd, profile string) bool {
-	f := strings.Fields(cmd)
-	for i, a := range f {
-		switch {
-		case (a == "--profile" || a == "-p") && i+1 < len(f):
-			return strings.Trim(f[i+1], `"'`) == profile
-		case strings.HasPrefix(a, "--profile="):
-			return strings.Trim(strings.TrimPrefix(a, "--profile="), `"'`) == profile
-		}
-	}
-	return true
+	p := helperProfile(cmd)
+	return p == "" || p == profile
 }
 
 func anyLayerEnv(layers []claudeLayer, key string) bool {
@@ -211,4 +205,59 @@ func anyLayerEnv(layers []claudeLayer, key string) bool {
 		}
 	}
 	return false
+}
+
+// claudeAuthStatus is the subset of `claude auth status` JSON ccauth reads
+// (Claude Code v2.1.268+ for configDirectory).
+type claudeAuthStatus struct {
+	AuthMethod      string `json:"authMethod"`
+	ConfigDirectory string `json:"configDirectory"`
+}
+
+// runClaudeAuthStatus asks Claude Code which credential it would use in dir.
+// CCAUTH_NONINTERACTIVE keeps a ccauth helper it may invoke from opening a
+// browser. The exit code is ignored (1 just means "not logged in").
+func runClaudeAuthStatus(ctx context.Context, dir string) (claudeAuthStatus, error) {
+	var st claudeAuthStatus
+	bin, err := claudeBinary()
+	if err != nil {
+		return st, err
+	}
+	cmd := exec.CommandContext(ctx, bin, "auth", "status")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "CCAUTH_NONINTERACTIVE=1")
+	out, _ := cmd.Output()
+	if err := json.Unmarshal(out, &st); err != nil {
+		return st, fmt.Errorf("unexpected `claude auth status` output (Claude Code too old?): %w", err)
+	}
+	return st, nil
+}
+
+// authStatusFinding explains the credential Claude Code would use here.
+// helperWired reports whether a ccauth apiKeyHelper is in the settings files,
+// i.e. whether the gateway is expected in this directory.
+func authStatusFinding(st claudeAuthStatus, helperWired bool) finding {
+	where := ""
+	if st.ConfigDirectory != "" {
+		where = " (config dir " + st.ConfigDirectory + ")"
+	}
+	switch st.AuthMethod {
+	case "api_key_helper":
+		return finding{"✓", "Claude Code here authenticates with apiKeyHelper, i.e. via the gateway" + where}
+	case "claude.ai":
+		if helperWired {
+			return finding{"⚠", "Claude Code here uses your claude.ai subscription although an apiKeyHelper is configured; check `/status` in Claude Code" + where}
+		}
+		return finding{"•", "Claude Code here uses your claude.ai subscription; `ccauth claude` starts a gateway session" + where}
+	case "api_key", "oauth_token", "third_party":
+		status := "•"
+		if helperWired {
+			status = "⚠"
+		}
+		return finding{status, fmt.Sprintf("Claude Code here authenticates with %s, not ccauth's apiKeyHelper%s", st.AuthMethod, where)}
+	case "none":
+		return finding{"•", "Claude Code here has no credential (not logged in, no apiKeyHelper)" + where}
+	default:
+		return finding{"•", fmt.Sprintf("Claude Code reports auth method %q%s", st.AuthMethod, where)}
+	}
 }

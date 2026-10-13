@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -137,6 +138,23 @@ func newSetupCmd() *cobra.Command {
 				slug := ask(r, "Portkey provider slug (x-portkey-provider)", "@anthropic-prod")
 				prof.GatewayOpts.Headers = map[string]string{"x-portkey-provider": slug}
 			}
+			// Static headers for every request, e.g. a team or routing header.
+			// Per-session ones can be added later with `ccauth claude -H`.
+			for {
+				line := ask(r, `Extra header to send to the gateway, "Name: value" (blank = done)`, "")
+				if line == "" {
+					break
+				}
+				h, err := gateway.ParseHeader(line)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "  %v\n", err)
+					continue
+				}
+				if prof.GatewayOpts.Headers == nil {
+					prof.GatewayOpts.Headers = map[string]string{}
+				}
+				prof.GatewayOpts.Headers[h.Name] = h.Value
+			}
 
 			// Background tasks and the haiku alias use Claude Code's default Haiku
 			// model ID, which many gateways don't serve under that name.
@@ -158,19 +176,37 @@ func newSetupCmd() *cobra.Command {
 				resolved = prof
 			}
 
-			js, _ := settingsJSON(name, resolved)
-			fmt.Fprintf(os.Stderr, "\nClaude Code wiring (%s):\n", claudeSettingsPath())
-			fmt.Fprintln(cmd.OutOrStdout(), js)
-
-			if write {
-				notes, err := mergeClaudeSettings(name, resolved)
-				if err != nil {
-					return fmt.Errorf("failed to update %s: %w", claudeSettingsPath(), err)
+			// Where Claude Code should use this profile. --write keeps its old
+			// meaning (every session) for scripts.
+			use := "global"
+			if !write {
+				fmt.Fprintln(os.Stderr, "\nHow should Claude Code use this profile?")
+				fmt.Fprintf(os.Stderr, "  launcher = only sessions you start with `ccauth claude -p %s` (settings files untouched)\n", name)
+				fmt.Fprintln(os.Stderr, "  project  = Claude Code sessions in the current repository (.claude/settings.local.json)")
+				fmt.Fprintln(os.Stderr, "  global   = every Claude Code session (~/.claude/settings.json)")
+				use = askChoice(r, "Use", []string{"launcher", "project", "global"}, "launcher")
+			}
+			switch use {
+			case "launcher":
+				fmt.Fprintf(os.Stderr, "\nStart gateway sessions with:  ccauth claude -p %s\n", name)
+				fmt.Fprintf(os.Stderr, "Tip:  alias claude-work='ccauth claude -p %s'   (plain `claude` keeps your own subscription)\n", name)
+			default:
+				path := claudeSettingsPath()
+				if use == "project" {
+					cwd, err := os.Getwd()
+					if err != nil {
+						return err
+					}
+					path = projectSettingsPath(cwd)
 				}
-				fmt.Fprintf(os.Stderr, "\n✓ Merged wiring into %s\n", claudeSettingsPath())
+				js, _ := settingsJSON(name, resolved)
+				fmt.Fprintln(cmd.OutOrStdout(), js)
+				notes, err := wireFile(path, name, resolved)
+				if err != nil {
+					return fmt.Errorf("failed to update %s: %w", path, err)
+				}
+				fmt.Fprintf(os.Stderr, "\n✓ Merged wiring into %s (undo with `ccauth unwire%s`)\n", path, map[bool]string{true: " --project"}[use == "project"])
 				printNotes(notes)
-			} else {
-				fmt.Fprintln(os.Stderr, "\nRe-run with --write to merge that into your Claude Code settings automatically.")
 			}
 
 			if len(gi.Notes(resolved)) > 0 {
@@ -212,34 +248,115 @@ func newInitCmd() *cobra.Command {
 }
 
 func newWireCmd() *cobra.Command {
-	var write bool
+	var write, project bool
+	var dir string
+	var headers []string
 	c := &cobra.Command{
 		Use:   "wire",
-		Short: "Print (or --write) the Claude Code settings.json wiring for a profile",
+		Short: "Print, or write into Claude Code settings, the wiring for a profile",
+		Long: `Without flags, prints the Claude Code settings for the profile.
+  --write    merge it into ~/.claude/settings.json (every Claude Code session)
+  --project  merge it into this repository's .claude/settings.local.json
+             (Claude Code sessions in this repository only; never committed)
+` + "`ccauth unwire`" + ` removes what ccauth wrote. For one-off sessions without touching any
+file, use ` + "`ccauth claude`" + `.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if write && project {
+				return fmt.Errorf("choose one of --write (all sessions) and --project (this repository)")
+			}
+			extra, err := parseHeaders(headers)
+			if err != nil {
+				return err
+			}
 			name, prof, _, err := resolve()
 			if err != nil {
 				return err
 			}
-			if write {
-				notes, err := mergeClaudeSettings(name, prof)
+			if !write && !project {
+				js, err := settingsJSON(name, prof, extra...)
 				if err != nil {
-					return fmt.Errorf("failed to update %s: %w", claudeSettingsPath(), err)
+					return err
 				}
-				fmt.Fprintf(os.Stderr, "Merged wiring for %q into %s\n", name, claudeSettingsPath())
-				printNotes(notes)
+				fmt.Fprintln(cmd.OutOrStdout(), js)
 				return nil
 			}
-			js, err := settingsJSON(name, prof)
+			path, err := wireTarget(project, dir)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), js)
+			notes, err := wireFile(path, name, prof, extra...)
+			if err != nil {
+				return fmt.Errorf("failed to update %s: %w", path, err)
+			}
+			fmt.Fprintf(os.Stderr, "Merged wiring for %q into %s\n", name, path)
+			if project {
+				fmt.Fprintln(os.Stderr, "Claude Code runs a project-level apiKeyHelper only after you trust the folder.")
+			}
+			printNotes(notes)
 			return nil
 		},
 	}
-	c.Flags().BoolVar(&write, "write", false, "merge into ~/.claude/settings.json instead of printing")
+	c.Flags().BoolVar(&write, "write", false, "merge into ~/.claude/settings.json (every session)")
+	c.Flags().BoolVar(&project, "project", false, "merge into this repository's .claude/settings.local.json")
+	c.Flags().StringVar(&dir, "dir", "", "with --project: the directory to wire instead of the current one")
+	c.Flags().StringArrayVarP(&headers, "header", "H", nil, `extra gateway header, "Name: value" (repeatable)`)
 	return c
+}
+
+func newUnwireCmd() *cobra.Command {
+	var project bool
+	var dir string
+	c := &cobra.Command{
+		Use:   "unwire",
+		Short: "Remove ccauth's wiring from Claude Code settings, keeping everything else",
+		Long: `Removes the apiKeyHelper and gateway env that ccauth wrote, from
+~/.claude/settings.json, or with --project from this repository's
+.claude/settings.local.json. Keys you changed afterwards are left in place, and
+the rest of the file is untouched, so Claude Code falls back to your own
+subscription or API key.`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			path, err := wireTarget(project, dir)
+			if err != nil {
+				return err
+			}
+			removed, notes, err := unwireFile(path, project)
+			if err != nil {
+				return fmt.Errorf("failed to update %s: %w", path, err)
+			}
+			if len(removed) == 0 {
+				fmt.Fprintf(os.Stderr, "No ccauth wiring found in %s\n", path)
+			} else {
+				fmt.Fprintf(os.Stderr, "Removed %s from %s\n", strings.Join(removed, ", "), path)
+			}
+			printNotes(notes)
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&project, "project", false, "remove it from this repository's .claude/settings.local.json")
+	c.Flags().StringVar(&dir, "dir", "", "with --project: the directory instead of the current one")
+	return c
+}
+
+// wireTarget returns the user settings file, or the project-local one.
+func wireTarget(project bool, dir string) (string, error) {
+	if !project {
+		if dir != "" {
+			return "", fmt.Errorf("--dir only applies together with --project")
+		}
+		return claudeSettingsPath(), nil
+	}
+	if dir == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		dir = cwd
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	return projectSettingsPath(abs), nil
 }
 
 // printNotes prints wiring notes (migrations, precedence conflicts) to stderr.

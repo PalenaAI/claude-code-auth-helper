@@ -219,8 +219,8 @@ Three ways to configure, in order of convenience:
 
 1. **`ccauth setup`** — interactive wizard: pick provider + gateway, answer for
    the fields that matter (Entra tenant/client IDs + API scope, Google client
-   ID/secret, OIDC issuer, gateway URL), and it writes the profile **and** the
-   Claude Code `settings.json` wiring (`--write` merges it automatically).
+   ID/secret, OIDC issuer, gateway URL, extra headers), write the profile, and
+   choose how Claude Code uses it (§7.2; `--write` = every session).
 2. **`ccauth init`** — writes a fully commented example config to edit by hand.
 3. **Env overrides** — `CCAUTH_TENANT_ID`, `CCAUTH_CLIENT_ID`,
    `CCAUTH_CLIENT_SECRET`, `CCAUTH_ISSUER`, `CCAUTH_BASE_URL` for CI/headless.
@@ -258,6 +258,37 @@ makes Claude Code call `GET <base>/v1/models?limit=1000` at startup with the sam
 credential (both headers, v2.1.248+). Discovery keeps IDs containing `claude` or
 `anthropic`, does not follow redirects, and silently falls back to the cached or
 built-in list on failure (3 s timeout, `CLAUDE_CODE_GATEWAY_MODEL_DISCOVERY_TIMEOUT_MS`).
+
+### 7.2 Where the wiring lives (work gateway next to a personal subscription)
+
+`apiKeyHelper` outranks a claude.ai login, so wherever the wiring applies Claude
+Code uses the gateway, and everywhere else the user's own subscription. ccauth
+offers three reaches, all built from the same `wiringSettings`:
+
+| Reach | Mechanism | Writes |
+|---|---|---|
+| One session | `ccauth claude` → `claude --settings <file>` (overrides settings files for that session) | `<state>/launch/<profile>.json` (0600, so header values stay out of `ps`) |
+| One repository | `ccauth wire --project` → `.claude/settings.local.json` at the repo root, which is where Claude Code reads it (the start dir outside a repo, on Windows, or when the repo root is `$HOME`) | that file |
+| Every session | `ccauth wire --write` → `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR`) | that file |
+
+- **Launcher.** Removes `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY` and
+  `CLAUDE_CODE_USE_*` from the child environment (they outrank the helper), sets
+  the gateway env there too, and on Unix `exec`s `claude` so it owns the terminal
+  and signals. `--isolated` adds `CLAUDE_CONFIG_DIR=~/.claude-<profile>`.
+- **Unwire.** `wire` records what it wrote per file in `<state>/wiring.json`;
+  `unwire` removes exactly those keys while they still hold that value (a key the
+  user edited stays, with a note), and deletes an emptied project file. Wiring
+  from older versions has no record: `unwire` then removes a `ccauth` helper and
+  the env values its profile would produce.
+- **Headers.** `gateway_opts.headers` plus per-session `-H "Name: value"`, merged
+  case-insensitively (the flag wins) into `ANTHROPIC_CUSTOM_HEADERS`. Names must
+  be HTTP tokens, values can't contain line breaks (the variable is
+  newline-separated, so one would inject a header), and `Authorization`,
+  `x-api-key` and Claude Code's protocol headers are refused because a custom
+  header replaces the built-in one.
+- **Doctor** runs `claude auth status` (with `CCAUTH_NONINTERACTIVE=1`, so a helper
+  it triggers never opens a browser) and reports `authMethod` for the current
+  directory.
 
 ### 7.1 Layered configuration (enterprise / zero-config for users)
 

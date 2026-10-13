@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -93,7 +94,22 @@ func newDoctorCmd() *cobra.Command {
 			// 6. What Claude Code will actually use (file-based settings + env).
 			fmt.Fprintln(out, "\nClaude Code settings:")
 			cwd, _ := os.Getwd()
-			for _, f := range checkClaudeCode(loadClaudeLayers(claudeManagedDir(), cwd, claudeSettingsPath()), os.Getenv, name) {
+			layers := loadClaudeLayers(claudeManagedDir(), cwd, claudeSettingsPath())
+			findings := checkClaudeCode(layers, os.Getenv, name)
+			helperWired := false
+			for _, l := range layers {
+				if strings.Contains(l.str("apiKeyHelper"), "ccauth") {
+					helperWired = true
+				}
+			}
+			actx, acancel := context.WithTimeout(context.Background(), 15*time.Second)
+			if st, err := runClaudeAuthStatus(actx, cwd); err != nil {
+				findings = append(findings, finding{"•", "could not ask Claude Code which credential it uses: " + err.Error()})
+			} else {
+				findings = append(findings, authStatusFinding(st, helperWired))
+			}
+			acancel()
+			for _, f := range findings {
 				if f.Status == "✗" || f.Status == "⚠" {
 					ok = false
 				}

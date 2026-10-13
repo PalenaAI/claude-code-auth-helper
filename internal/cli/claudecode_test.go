@@ -45,7 +45,7 @@ func TestCheckClaudeCode(t *testing.T) {
 		wantMsg    string
 	}{
 		{"healthy user wiring", []claudeLayer{layer("user", wired("ccauth token --profile corp"))}, nil, "✓", "ccauth token --profile corp"},
-		{"no helper anywhere", []claudeLayer{layer("user", map[string]any{})}, nil, "⚠", "no apiKeyHelper"},
+		{"no helper anywhere is fine for the launcher", []claudeLayer{layer("user", map[string]any{})}, nil, "•", "ccauth claude -p corp"},
 		{"foreign helper", []claudeLayer{layer("user", wired("/usr/local/bin/get-key"))}, nil, "⚠", "not ccauth"},
 		{"wrong profile", []claudeLayer{layer("user", wired("ccauth token -p other"))}, nil, "⚠", `does not use profile "corp"`},
 		{"managed helper wins over user", []claudeLayer{

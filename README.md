@@ -76,26 +76,40 @@ Or download a prebuilt, checksummed binary from the
 ## Quick start
 
 ```bash
-ccauth setup --write     # pick provider + gateway; writes config + Claude Code wiring
+ccauth setup             # pick provider + gateway, and where Claude Code should use it
 ccauth login             # sign in (browser). Use --device for headless/SSH.
-ccauth status            # confirm you're logged in and see token expiry
-# start Claude Code — it now authenticates through your SSO
+ccauth claude            # start Claude Code on the gateway (or plain `claude`, if you wired it)
 ```
 
 Prefer to hand-edit? `ccauth init` writes a fully commented config; `ccauth wire` prints the exact `settings.json` block.
+
+### Work gateway and personal subscription side by side
+
+Pick how far the gateway wiring reaches. Plain `claude` keeps your own claude.ai subscription wherever ccauth isn't wired:
+
+| Want | Command | What it touches |
+|---|---|---|
+| One gateway session | `ccauth claude -p work` (tip: `alias claude-work='ccauth claude -p work'`) | Nothing: passes `claude --settings` for that session only |
+| Every session in a work repo, incl. the VS Code extension | `ccauth wire --project -p work` | `<repo>/.claude/settings.local.json` (never committed) |
+| Every session everywhere | `ccauth wire --write -p work` | `~/.claude/settings.json` |
+| Undo either `wire` | `ccauth unwire [--project]` | Removes only what ccauth wrote |
+
+Extra gateway headers (e.g. a team header): `gateway_opts.headers` in the profile for every request, or `-H "x-team: data"` on `ccauth claude` / `ccauth wire` (repeatable; overrides a profile header of the same name). `ccauth claude --isolated` also gives work its own Claude Code config dir (`~/.claude-<profile>`: history, memory, MCP servers, plugins). `ccauth doctor` shows which credential Claude Code uses in the current directory.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `ccauth setup [--write]` | Interactive wizard: choose provider + gateway, write the profile (and optionally the Claude Code wiring) |
+| `ccauth setup [--write]` | Interactive wizard: choose provider + gateway, write the profile, and pick launcher / project / global wiring (`--write` = global) |
 | `ccauth init [--force]` | Write a commented example `config.toml` to edit by hand |
 | `ccauth login [--device]` | Interactive SSO sign-in; stores the refresh token in your OS keychain |
 | `ccauth token` | Print the current credential to stdout — **this is your `apiKeyHelper`**. Silent refresh; auto browser re-auth on expiry |
 | `ccauth status [--json]` | Show the active profile, config source, login state, and token expiry |
-| `ccauth wire [--write]` | Print (or merge) the `settings.json` wiring for a profile |
+| `ccauth claude [-H hdr] [--isolated] [-- claude-flags]` | Start Claude Code on the gateway for one session, without touching settings files |
+| `ccauth wire [--write\|--project] [-H hdr]` | Print the wiring, or merge it into `~/.claude/settings.json` / this repo's `.claude/settings.local.json` |
+| `ccauth unwire [--project]` | Remove ccauth's wiring, keeping everything else |
 | `ccauth config path\|show\|sync` | Inspect the config layers (user/embedded/managed/remote) or pull remote config |
-| `ccauth doctor [--probe]` | Diagnose config + session, check Claude Code's settings for anything that bypasses or blocks the helper, and print the gateway-side checklist |
+| `ccauth doctor [--probe]` | Diagnose config + session, show which credential Claude Code uses here, flag anything that bypasses or blocks the helper, and print the gateway-side checklist |
 | `ccauth logout` | Delete the stored session for a profile |
 | `ccauth gateways` | List supported gateways and how each authenticates |
 

@@ -57,3 +57,24 @@ func TestNotesAddDiscoveryOnlyWhenEnabled(t *testing.T) {
 		}
 	}
 }
+
+func TestParseHeader(t *testing.T) {
+	h, err := ParseHeader("  X-Team :  platform eng ")
+	if err != nil || h != (Header{"X-Team", "platform eng"}) {
+		t.Fatalf("ParseHeader = %+v, %v", h, err)
+	}
+	for _, bad := range []string{"no-colon", ": value", "Authorization: Bearer x", "x-api-key: k", "bad name: v", "x-a: line\nInjected: 1"} {
+		if _, err := ParseHeader(bad); err == nil {
+			t.Errorf("ParseHeader(%q) should fail", bad)
+		}
+	}
+}
+
+func TestCustomHeadersExtraOverridesCaseInsensitively(t *testing.T) {
+	p := config.Profile{GatewayOpts: config.GatewayOpts{Headers: map[string]string{"X-Team": "a", "x-route": "r"}}}
+	got := CustomHeaders(p, Header{"x-team", "b"}, Header{"x-extra", "e"})
+	want := "x-extra: e\nx-route: r\nx-team: b"
+	if got != want {
+		t.Errorf("CustomHeaders = %q, want %q", got, want)
+	}
+}

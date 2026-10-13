@@ -189,3 +189,21 @@ func TestRedirectURIToRegister(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRejectsBadProfileHeader(t *testing.T) {
+	for name, hdr := range map[string]map[string]string{
+		"injection": {"x-team": "a\nAuthorization: Bearer evil"},
+		"reserved":  {"X-Api-Key": "k"},
+		"bad name":  {"x team": "a"},
+	} {
+		c := base(Profile{
+			Provider:    ProviderEntra,
+			Gateway:     GatewayLiteLLM,
+			OAuth:       OAuth{TenantID: "t", ClientID: "c", Scopes: []string{"c/.default"}},
+			GatewayOpts: GatewayOpts{Headers: hdr},
+		})
+		if _, err := c.Resolve("x"); err == nil || !strings.Contains(err.Error(), "gateway_opts.headers") {
+			t.Errorf("%s: want a gateway_opts.headers error, got %v", name, err)
+		}
+	}
+}

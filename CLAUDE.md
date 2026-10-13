@@ -51,6 +51,11 @@ Go (single static binary). Deps: `spf13/cobra` (CLI), `coreos/go-oidc/v3` +
   opaque); generic OIDC→configurable. Encoded in `config.applyPresets`.
 - **Mode per gateway:** Bifrost has no native inbound JWT validation → defaults to
   `exchange`; others default to `passthrough`.
+- **Wiring reach** (DESIGN §7.2): `ccauth claude` (`claude --settings`, writes no
+  settings file), `wire --project` (repo-root `.claude/settings.local.json`),
+  `wire --write` (user). All come from `wiringSettings`; `wire` records what it
+  wrote in `<state>/wiring.json` and `unwire` removes only that. Custom headers go
+  through `config.ValidateHeader` (no CR/LF, no Authorization/x-api-key).
 - Never log tokens. `ccauth` parses JWTs **unverified** only to read `exp`;
   cryptographic verification is the gateway's job.
 
