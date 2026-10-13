@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-13
+
+First stable release.
+
+### Stability
+
+From 1.0.0 on, these follow semantic versioning: breaking changes to them only
+come with a new major version.
+
+- Command names, flags and exit behavior.
+- The `config.toml` format (profiles, layers, `gateway_opts`, exchange settings).
+- The `ccauth token` contract: only the credential on stdout, diagnostics on stderr.
+- What ccauth writes elsewhere: the Claude Code wiring (`apiKeyHelper` + `env`),
+  `.claude/settings.local.json` for `wire --project`, and the `ccauth: <profile>`
+  entries in Claude Desktop's configuration library.
+
+Human-readable output (colors, wording, layout) is not part of that contract;
+use `ccauth status --json` for scripts.
+
 ### Added
 
 - `ccauth setup` is now an interactive form (Charm `huh`): arrow-key selects,
@@ -19,7 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commands and values). `--no-color` / `NO_COLOR=1` turns colors off; output to
   a pipe or file is always plain, and the credential `ccauth token` prints is
   never styled.
-
 - `ccauth desktop apply|personal|export|status` configures Claude Desktop's
   third-party inference mode for the profile's gateway: `apply` adds/updates a
   `ccauth: <profile>` entry in Desktop's configuration library and applies it,
@@ -178,7 +196,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Reference material:** `DESIGN.md`, `ENTERPRISE.md`, LiteLLM and Portkey
   examples, a Bifrost edge-auth plugin, and a token-exchange broker contract.
 
-[Unreleased]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.2...v0.1.3
