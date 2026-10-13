@@ -25,7 +25,8 @@ Go (single static binary). Deps: `spf13/cobra` (CLI), `coreos/go-oidc/v3` +
 - `internal/gateway` — per-gateway presets + Claude Code wiring
 - `internal/jwtutil` — unverified expiry/claims reader
 - `internal/desktop` — Claude Desktop 3P config: settings builder, configLibrary read/write, MDM/JSON exports
-- `internal/cli` — commands
+- `internal/ui` — styled stderr/status output (lipgloss; plain when not a TTY or NO_COLOR)
+- `internal/cli` — commands (`wizard.go` = the setup form, Charm `huh`)
 - `examples/` — LiteLLM config, Portkey notes, Bifrost plugin (own go.mod), broker contract
 
 ## Key invariants (don't break these)
@@ -62,6 +63,12 @@ Go (single static binary). Deps: `spf13/cobra` (CLI), `coreos/go-oidc/v3` +
   its own `ccauth: <profile>` entries + `appliedId`, never while Desktop runs.
   `token` treats `CLAUDE_HELPER_CONTEXT` ≠ `interactive` as non-interactive; with
   the variable unset the CLI path must stay unchanged.
+- **Styling** goes through `internal/ui` only; never style the credential `token`
+  writes to stdout. The setup wizard is a sequence of small `huh` forms built
+  from earlier answers (no `WithHideFunc`/`OptionsFunc`: huh's accessible mode
+  ignores both and crashes on computed options). Fields with a default must
+  accept "" (accessible mode validates before applying the default).
+  `wizard_test.go` drives it via accessible mode with a one-line-per-Read reader.
 - Never log tokens. `ccauth` parses JWTs **unverified** only to read `exp`;
   cryptographic verification is the gateway's job.
 

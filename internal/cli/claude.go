@@ -16,6 +16,7 @@ import (
 
 	"github.com/PalenaAI/claude-code-auth-helper/internal/config"
 	"github.com/PalenaAI/claude-code-auth-helper/internal/gateway"
+	"github.com/PalenaAI/claude-code-auth-helper/internal/ui"
 )
 
 func newClaudeCmd() *cobra.Command {
@@ -68,7 +69,7 @@ Tip:  alias claude-work='ccauth claude -p work'`,
 			}
 			env, dropped := launchEnv(os.Environ(), buildEnv(prof, extra...), configDir)
 			for _, k := range dropped {
-				fmt.Fprintf(os.Stderr, "ccauth: unset %s for this session (it would take precedence over apiKeyHelper)\n", k)
+				ui.Info(os.Stderr, "ccauth: unset %s for this session %s", ui.Val(k), ui.Hint("(it would take precedence over apiKeyHelper)"))
 			}
 			argv := append([]string{bin, "--settings", settingsPath}, args...)
 			return execClaude(bin, argv, env)

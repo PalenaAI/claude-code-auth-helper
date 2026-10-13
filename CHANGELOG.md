@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ccauth setup` is now an interactive form (Charm `huh`): arrow-key selects,
+  inline validation, steps that only show what applies to your provider and
+  gateway, and a summary card with the redirect URI to register and the next
+  commands. `--accessible` / `ACCESSIBLE=1` gives plain numbered prompts for
+  screen readers.
+- Colored, easier-to-scan output for `doctor`, `status`, `login`, `wire`,
+  `unwire`, `desktop` and errors (✓ / ⚠ / ✗, section headings, highlighted
+  commands and values). `--no-color` / `NO_COLOR=1` turns colors off; output to
+  a pipe or file is always plain, and the credential `ccauth token` prints is
+  never styled.
+
 - `ccauth desktop apply|personal|export|status` configures Claude Desktop's
   third-party inference mode for the profile's gateway: `apply` adds/updates a
   `ccauth: <profile>` entry in Desktop's configuration library and applies it,

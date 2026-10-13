@@ -5,13 +5,18 @@
 package cli
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
 
 	"github.com/PalenaAI/claude-code-auth-helper/internal/config"
 	"github.com/PalenaAI/claude-code-auth-helper/internal/store"
 )
 
-var profileFlag string
+var (
+	profileFlag string
+	noColor     bool
+)
 
 // NewRootCmd builds the root command tree.
 func NewRootCmd(version string) *cobra.Command {
@@ -37,6 +42,13 @@ Use it from Claude Code in one of three ways:
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	root.PersistentPreRun = func(*cobra.Command, []string) {
+		// NO_COLOR is what the styling layer and the setup form both honor.
+		if noColor {
+			_ = os.Setenv("NO_COLOR", "1")
+		}
+	}
+	root.PersistentFlags().BoolVar(&noColor, "no-color", false, "plain output without colors (also: NO_COLOR=1)")
 	root.PersistentFlags().StringVarP(&profileFlag, "profile", "p", "",
 		"config profile to use (default: the config's default_profile, or \"default\")")
 

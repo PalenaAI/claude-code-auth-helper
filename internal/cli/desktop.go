@@ -16,6 +16,7 @@ import (
 	"github.com/PalenaAI/claude-code-auth-helper/internal/config"
 	"github.com/PalenaAI/claude-code-auth-helper/internal/desktop"
 	"github.com/PalenaAI/claude-code-auth-helper/internal/store"
+	"github.com/PalenaAI/claude-code-auth-helper/internal/ui"
 )
 
 func newDesktopCmd() *cobra.Command {
@@ -94,7 +95,7 @@ func guardLibraryWrite(force bool) error {
 		return fmt.Errorf("Claude Desktop is running; quit it first (it rewrites its configuration library while running), or pass --force")
 	}
 	if m := desktop.ManagedSource(); m != "" {
-		fmt.Fprintf(os.Stderr, "⚠ Managed policy %s is present: Claude Desktop ignores the local configuration library while it exists. Ask IT to deploy `ccauth desktop export` instead.\n", m)
+		ui.Warn(os.Stderr, "Managed policy %s is present: Claude Desktop ignores the local configuration library while it exists. Ask IT to deploy %s instead.", ui.Val(m), ui.Cmd("ccauth desktop export"))
 	}
 	return nil
 }
@@ -117,21 +118,22 @@ func newDesktopApplyCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("update Claude Desktop's configuration library: %w", err)
 			}
-			fmt.Fprintf(os.Stderr, "✓ Applied Claude Desktop configuration %q (%s)\n", "ccauth: "+name, id)
-			fmt.Fprintf(os.Stderr, "  gateway %s, credential: %s\n", prof.GatewayOpts.BaseURL, describeDesktopAuth(auth, settings))
+			ui.OK(os.Stderr, "Applied Claude Desktop configuration %s %s", ui.Bold("ccauth: "+name), ui.Hint("("+id+")"))
+			ui.Info(os.Stderr, "Gateway %s · credential: %s", ui.Val(prof.GatewayOpts.BaseURL), describeDesktopAuth(auth, settings))
 			switch auth {
 			case desktop.AuthSSO:
 				uri, _ := prof.RedirectURIToRegister()
-				fmt.Fprintf(os.Stderr, "  Desktop signs in to your IdP itself; the app registration needs the redirect URI %s (Mobile and desktop applications on Entra).\n", uri)
+				ui.Info(os.Stderr, "Desktop signs in to your IdP itself; register the redirect URI %s %s", ui.Val(uri), ui.Hint("(Mobile and desktop applications on Entra)"))
 			case desktop.AuthHelper:
 				if st := store.New(prof.Store); st != nil {
 					if _, err := st.Load(name); errors.Is(err, store.ErrNoSession) {
-						fmt.Fprintf(os.Stderr, "  ⚠ no ccauth session yet: run `ccauth login -p %s` so Desktop's helper has a token.\n", name)
+						ui.Warn(os.Stderr, "No ccauth session yet: run %s so Desktop's helper has a token.", ui.Cmd("ccauth login -p "+name))
 					}
 				}
 			}
-			fmt.Fprintln(os.Stderr, "Next: start Claude Desktop. If it opens your Claude.ai account, sign out and pick your organization's sign-in on the login screen.")
-			fmt.Fprintln(os.Stderr, "Back to Claude.ai later: `ccauth desktop personal`.")
+			ui.Heading(os.Stderr, "Next")
+			ui.Println(os.Stderr, "  Start Claude Desktop. "+ui.Hint("If it opens your Claude.ai account, sign out and pick your organization's sign-in."))
+			ui.Println(os.Stderr, "  "+ui.Hint("Back to Claude.ai later: ")+ui.Cmd("ccauth desktop personal"))
 			return nil
 		},
 	}
@@ -166,7 +168,7 @@ the library; ` + "`ccauth desktop apply`" + ` switches back.`,
 			if err != nil {
 				return fmt.Errorf("update Claude Desktop's configuration library: %w", err)
 			}
-			fmt.Fprintf(os.Stderr, "✓ Applied an empty Claude Desktop configuration (%s): next launch uses your Claude.ai sign-in.\n", id)
+			ui.OK(os.Stderr, "Applied an empty Claude Desktop configuration %s: the next launch uses your Claude.ai sign-in.", ui.Hint("("+id+")"))
 			return nil
 		},
 	}
@@ -220,7 +222,7 @@ machines (e.g. /opt/homebrew/bin/ccauth, or C:\Program Files\ccauth\ccauth.exe).
 			if err := os.WriteFile(out, b, 0o644); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "Wrote %s\n", out)
+			ui.OK(os.Stderr, "Wrote %s", ui.Val(out))
 			return nil
 		},
 	}
@@ -237,7 +239,7 @@ func newDesktopStatusCmd() *cobra.Command {
 		Short: "Show which configuration Claude Desktop will use at its next launch",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			for _, f := range desktopFindings() {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", f.Status, f.Msg)
+				ui.Status(cmd.OutOrStdout(), f.Status, f.Msg)
 			}
 			return nil
 		},

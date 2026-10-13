@@ -20,6 +20,7 @@ import (
 	"github.com/PalenaAI/claude-code-auth-helper/internal/jwtutil"
 	"github.com/PalenaAI/claude-code-auth-helper/internal/oidc"
 	"github.com/PalenaAI/claude-code-auth-helper/internal/store"
+	"github.com/PalenaAI/claude-code-auth-helper/internal/ui"
 )
 
 func newLoginCmd() *cobra.Command {
@@ -46,8 +47,8 @@ func newLoginCmd() *cobra.Command {
 			if c, _ := jwtutil.Parse(sess.IDToken); c.Email != "" {
 				who = " as " + c.Email
 			}
-			fmt.Fprintf(os.Stderr, "Signed in%s on profile %q (%s → %s). Session stored via %q backend.\n",
-				who, name, prof.Provider, prof.Gateway, st.Kind())
+			ui.OK(os.Stderr, "Signed in%s on profile %s %s", who, ui.Bold(name),
+				ui.Hint(fmt.Sprintf("(%s → %s, session in the %s store)", prof.Provider, prof.Gateway, st.Kind())))
 			return nil
 		},
 	}
@@ -162,7 +163,7 @@ func autoLogin(prof config.Profile, st store.Store, name string) error {
 		return nil
 	}
 
-	fmt.Fprintln(os.Stderr, "ccauth: your session expired — opening a browser to re-authenticate…")
+	ui.Info(os.Stderr, "ccauth: your session expired — opening a browser to re-authenticate…")
 	ctx, cancelLogin := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelLogin()
 	sess, err := oidc.Login(ctx, prof, false)
@@ -184,7 +185,7 @@ func newLogoutCmd() *cobra.Command {
 			if err := st.Delete(name); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "Cleared session for profile %q.\n", name)
+			ui.OK(os.Stderr, "Cleared the session for profile %s", ui.Bold(name))
 			return nil
 		},
 	}
@@ -255,32 +256,41 @@ func newStatusCmd() *cobra.Command {
 				return enc.Encode(out)
 			}
 
-			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
-			fmt.Fprintf(w, "Profile:\t%s\n", out.Profile)
-			if out.Source != "" {
-				fmt.Fprintf(w, "Config source:\t%s\n", out.Source)
+			w := cmd.OutOrStdout()
+			state := ui.Glyph("✓") + " signed in"
+			if !out.LoggedIn {
+				state = ui.Glyph("✗") + " not signed in — run " + ui.Cmd("ccauth login -p "+out.Profile)
+			} else if out.NeedsLogin {
+				state = ui.Glyph("⚠") + " session needs a new sign-in — run " + ui.Cmd("ccauth login -p "+out.Profile)
 			}
-			fmt.Fprintf(w, "Provider:\t%s\n", out.Provider)
-			fmt.Fprintf(w, "Gateway:\t%s\n", out.Gateway)
-			fmt.Fprintf(w, "Mode:\t%s\n", out.Mode)
-			fmt.Fprintf(w, "Base URL:\t%s\n", out.BaseURL)
-			fmt.Fprintf(w, "Emits:\t%s token\n", out.Credential)
-			fmt.Fprintf(w, "Store:\t%s\n", out.StoreBackend)
-			fmt.Fprintf(w, "Auto re-auth:\t%t\n", out.InteractiveHelper)
-			fmt.Fprintf(w, "Logged in:\t%t\n", out.LoggedIn)
+			rows := [][2]string{{"Profile", ui.Bold(out.Profile)}}
+			if out.Source != "" {
+				rows = append(rows, [2]string{"Config source", out.Source})
+			}
+			rows = append(rows,
+				[2]string{"Provider", out.Provider},
+				[2]string{"Gateway", out.Gateway + "  " + ui.Val(out.BaseURL)},
+				[2]string{"Mode", fmt.Sprintf("%s · emits the %s token", out.Mode, out.Credential)},
+				[2]string{"Store", out.StoreBackend},
+				[2]string{"Auto re-auth", fmt.Sprintf("%t", out.InteractiveHelper)},
+				[2]string{"Session", state},
+			)
 			if out.Email != "" {
-				fmt.Fprintf(w, "Identity:\t%s\n", out.Email)
+				rows = append(rows, [2]string{"Identity", out.Email})
 			}
 			if !out.IDPExpiry.IsZero() {
-				fmt.Fprintf(w, "IdP token expires:\t%s (%s)\n", out.IDPExpiry.Format(time.RFC3339), humanUntil(out.IDPExpiry))
+				rows = append(rows, [2]string{"IdP token expires", fmt.Sprintf("%s %s", out.IDPExpiry.Format(time.RFC3339), ui.Hint("("+humanUntil(out.IDPExpiry)+")"))})
 			}
 			if !out.EmitExpiry.IsZero() {
-				fmt.Fprintf(w, "Credential expires:\t%s (%s)\n", out.EmitExpiry.Format(time.RFC3339), humanUntil(out.EmitExpiry))
+				rows = append(rows, [2]string{"Credential expires", fmt.Sprintf("%s %s", out.EmitExpiry.Format(time.RFC3339), ui.Hint("("+humanUntil(out.EmitExpiry)+")"))})
 			}
-			if out.Message != "" {
-				fmt.Fprintf(w, "Note:\t%s\n", out.Message)
+			if out.Message != "" && out.LoggedIn {
+				rows = append(rows, [2]string{"Note", out.Message})
 			}
-			return w.Flush()
+			for _, r := range ui.KV(rows...) {
+				ui.Println(w, r)
+			}
+			return nil
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, "output machine-readable JSON")

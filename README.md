@@ -81,6 +81,8 @@ ccauth login             # sign in (browser). Use --device for headless/SSH.
 ccauth claude            # start Claude Code on the gateway (or plain `claude`, if you wired it)
 ```
 
+`ccauth setup` is an interactive form (arrow keys, inline validation) that ends with a summary of what to register in your identity provider and the next command to run. `--accessible` (or `ACCESSIBLE=1`) switches it to plain numbered prompts for screen readers; `--no-color` (or `NO_COLOR=1`) turns colors off everywhere. Output that isn't a terminal is always plain.
+
 Prefer to hand-edit? `ccauth init` writes a fully commented config; `ccauth wire` prints the exact `settings.json` block.
 
 ### Work gateway and personal subscription side by side

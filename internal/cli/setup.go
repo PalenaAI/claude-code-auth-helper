@@ -4,30 +4,32 @@
 package cli
 
 import (
-	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
+	"sort"
 	"strings"
 
+	"charm.land/huh/v2"
 	"github.com/spf13/cobra"
 
 	"github.com/PalenaAI/claude-code-auth-helper/internal/config"
 	"github.com/PalenaAI/claude-code-auth-helper/internal/gateway"
+	"github.com/PalenaAI/claude-code-auth-helper/internal/ui"
 )
 
 func newSetupCmd() *cobra.Command {
-	var write bool
+	var write, accessible bool
 	c := &cobra.Command{
 		Use:   "setup",
 		Short: "Interactive wizard: choose a provider + gateway and write the config",
-		Long:  "Walks you through picking an identity provider and gateway, collects the required details (Entra tenant/client IDs, Google client ID, OIDC issuer, gateway URL), writes a profile to the config file, and prints the Claude Code wiring.",
+		Long:  "Walks you through picking an identity provider and gateway, collects the required details (Entra tenant/client IDs, Google client ID, OIDC issuer, gateway URL), writes a profile to the config file, and wires it into Claude Code the way you choose.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if !isTTY() {
 				return fmt.Errorf("setup needs an interactive terminal; run `ccauth init` to write an example config you can edit by hand")
 			}
-			r := bufio.NewReader(os.Stdin)
+			errw := os.Stderr
 
 			// If IT has already provisioned profiles via a managed/remote/embedded
 			// layer, most users just need `ccauth login`.
@@ -38,12 +40,13 @@ func newSetupCmd() *cobra.Command {
 						itProfiles = append(itProfiles, fmt.Sprintf("%s (%s)", pn, src))
 					}
 				}
-				if len(itProfiles) > 0 {
-					fmt.Fprintf(os.Stderr, "Your organization has already provisioned: %s\n", strings.Join(itProfiles, ", "))
-					fmt.Fprintf(os.Stderr, "You can likely skip setup and just run `ccauth login`. Continuing will add a personal profile.\n\n")
-				}
 				if merged.AllowUserProfiles != nil && !*merged.AllowUserProfiles {
 					return fmt.Errorf("your organization has locked profiles (allow_user_profiles = false); use a provisioned profile with `ccauth login -p <name>`")
+				}
+				if len(itProfiles) > 0 {
+					sort.Strings(itProfiles)
+					ui.Info(errw, "Your organization has already provisioned: %s", ui.Val(strings.Join(itProfiles, ", ")))
+					ui.Println(errw, "  "+ui.Hint("You can likely skip setup and just run ")+ui.Cmd("ccauth login")+ui.Hint(". Continuing adds a personal profile."))
 				}
 			}
 
@@ -56,111 +59,35 @@ func newSetupCmd() *cobra.Command {
 				cfg.Profiles = map[string]config.Profile{}
 			}
 
-			name := ask(r, "Profile name", firstNonEmpty(cfg.DefaultProfile, "default"))
-
-			provider := askChoice(r, "Identity provider", []string{"entra", "google", "oidc"}, "entra")
-			gw := askChoice(r, "Gateway", []string{"litellm", "portkey", "bifrost", "generic"}, "litellm")
-
-			prof := config.Profile{
-				Provider: config.Provider(provider),
-				Gateway:  config.Gateway(gw),
+			a := setupAnswers{
+				Name: firstNonEmpty(cfg.DefaultProfile, "default"), Provider: "entra", Gateway: "litellm",
+				Credential: "access", Flow: "auth_code", AutoReauth: true, ExStyle: "rfc8693", Use: "launcher",
+			}
+			run := func(groups ...*huh.Group) error {
+				return huh.NewForm(groups...).
+					WithTheme(setupTheme()).
+					WithAccessible(accessible || os.Getenv("ACCESSIBLE") != "").
+					WithOutput(errw).
+					Run()
+			}
+			if err := runSetupWizard(&a, !write, run); err != nil {
+				if errors.Is(err, huh.ErrUserAborted) {
+					return fmt.Errorf("setup cancelled; nothing was written")
+				}
+				return err
+			}
+			if write {
+				a.Use = "global"
 			}
 
-			switch provider {
-			case "entra":
-				prof.OAuth.TenantID = ask(r, "Entra tenant ID (GUID or verified domain)", "")
-				prof.OAuth.ClientID = ask(r, "App registration (client) ID of your CLI app", "")
-				// Default to the single-app form (CLI app == gateway API), the setup in
-				// docs/identity-providers/entra-id.md. Re-ask until Entra would accept it.
-				fmt.Fprintln(os.Stderr, "  API scope (token audience): <client-id>/.default if the CLI app is also the gateway's API,")
-				fmt.Fprintln(os.Stderr, "  else api://<gateway-app-id>/.default for a separate gateway app.")
-				for {
-					scope := ask(r, "API scope your gateway validates (aud)", prof.OAuth.ClientID+"/.default")
-					if err := config.ValidateEntraScopes(prof.OAuth.ClientID, []string{scope}); err != nil {
-						fmt.Fprintf(os.Stderr, "  %v\n", err)
-						continue
-					}
-					prof.OAuth.Scopes = []string{scope}
-					break
-				}
-			case "google":
-				prof.OAuth.ClientID = ask(r, "OAuth client ID (Desktop app type)", "")
-				prof.OAuth.ClientSecret = ask(r, "OAuth client secret", "")
-				fmt.Fprintln(os.Stderr, "  note: Google access tokens are opaque, so this profile emits the ID token (aud = your client ID).")
-			case "oidc":
-				prof.OAuth.Issuer = ask(r, "OIDC issuer URL (e.g. https://your.okta.com)", "")
-				prof.OAuth.ClientID = ask(r, "Client ID", "")
-				prof.OAuth.ClientSecret = ask(r, "Client secret (blank for public client + PKCE)", "")
-				scopes := ask(r, "Scopes (space separated)", "openid profile email")
-				prof.OAuth.Scopes = strings.Fields(scopes)
-				prof.OAuth.Credential = config.TokenKind(askChoice(r, "Emit which token to the gateway", []string{"access", "id"}, "access"))
+			prof, err := a.profile()
+			if err != nil {
+				return err
 			}
-
-			prof.OAuth.Flow = config.Flow(askChoice(r, "Login flow", []string{"auth_code", "device_code"}, "auth_code"))
-			if prof.OAuth.Flow == config.FlowAuthCode {
-				// A fixed port is only needed when something forwards it (devcontainers,
-				// SSH) or the IdP compares ports exactly; Entra ignores it.
-				if p := ask(r, "Fixed callback port (blank = random; set one for devcontainers or IdPs that match ports)", ""); p != "" {
-					port, err := strconv.Atoi(p)
-					if err != nil || port < 1 || port > 65535 {
-						return fmt.Errorf("callback port %q: want a number between 1 and 65535", p)
-					}
-					prof.OAuth.RedirectPort = port
-				}
-				uri, portMatters := prof.RedirectURIToRegister()
-				fmt.Fprintf(os.Stderr, "  Register this redirect URI in your IdP app (platform: Mobile and desktop applications on Entra): %s\n", uri)
-				if !portMatters {
-					fmt.Fprintln(os.Stderr, "  Entra ignores the port of localhost redirect URIs, so any port matches; only the /callback path must.")
-				}
+			name := a.Name
+			if _, exists := cfg.Profiles[name]; exists {
+				ui.Warn(errw, "Replacing the existing profile %s", ui.Val(name))
 			}
-
-			// Let the helper re-open a browser automatically when the session
-			// expires, so users don't have to drop to a terminal mid-session.
-			interactive := strings.EqualFold(ask(r, "Auto re-authenticate in a browser when the session expires? (yes/no)", "yes"), "yes")
-			prof.HelperInteractive = &interactive
-
-			gi, _ := gateway.Get(config.Gateway(gw))
-			prof.GatewayOpts.BaseURL = ask(r, "Gateway base URL", defaultBaseURL(config.Gateway(gw)))
-			prof.GatewayOpts.TTLms = 3000000 // 50 min; below typical token lifetime, refreshed on demand
-
-			prof.Mode = config.Mode(askChoice(r, "Credential mode", []string{"passthrough", "exchange"}, string(gi.DefaultMode)))
-			if prof.Mode == config.ModeExchange {
-				prof.Exchange.Style = askChoice(r, "Exchange style", []string{"rfc8693", "broker"}, "rfc8693")
-				prof.Exchange.TokenURL = ask(r, "Token-exchange / broker URL", "")
-				if prof.Exchange.Style == "rfc8693" {
-					prof.Exchange.Audience = ask(r, "Exchange audience (identifies the gateway)", string(gw))
-				} else {
-					prof.Exchange.KeyField = ask(r, "JSON field in the broker response holding the gateway key", "key")
-				}
-			}
-
-			if gw == "portkey" {
-				slug := ask(r, "Portkey provider slug (x-portkey-provider)", "@anthropic-prod")
-				prof.GatewayOpts.Headers = map[string]string{"x-portkey-provider": slug}
-			}
-			// Static headers for every request, e.g. a team or routing header.
-			// Per-session ones can be added later with `ccauth claude -H`.
-			for {
-				line := ask(r, `Extra header to send to the gateway, "Name: value" (blank = done)`, "")
-				if line == "" {
-					break
-				}
-				h, err := gateway.ParseHeader(line)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "  %v\n", err)
-					continue
-				}
-				if prof.GatewayOpts.Headers == nil {
-					prof.GatewayOpts.Headers = map[string]string{}
-				}
-				prof.GatewayOpts.Headers[h.Name] = h.Value
-			}
-
-			// Background tasks and the haiku alias use Claude Code's default Haiku
-			// model ID, which many gateways don't serve under that name.
-			prof.GatewayOpts.HaikuModel = ask(r, "Model for background tasks / haiku alias, if your gateway names it differently (blank = Claude Code default)", "")
-			prof.GatewayOpts.ModelDiscovery = strings.EqualFold(ask(r, "Let Claude Code discover models via GET /v1/models on the gateway? (yes/no)", "no"), "yes")
-
 			cfg.Profiles[name] = prof
 			if cfg.DefaultProfile == "" {
 				cfg.DefaultProfile = name
@@ -168,31 +95,23 @@ func newSetupCmd() *cobra.Command {
 			if err := config.Save(cfg); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "\n✓ Wrote profile %q to %s\n", name, config.Path())
+			ui.Println(errw)
+			ui.OK(errw, "Saved profile %s to %s", ui.Bold(name), ui.Val(config.Path()))
 
 			resolved, err := cfg.Resolve(name)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "⚠ profile needs attention: %v\n", err)
+				ui.Warn(errw, "The profile needs attention: %v", err)
 				resolved = prof
 			}
 
-			// Where Claude Code should use this profile. --write keeps its old
-			// meaning (every session) for scripts.
-			use := "global"
-			if !write {
-				fmt.Fprintln(os.Stderr, "\nHow should Claude Code use this profile?")
-				fmt.Fprintf(os.Stderr, "  launcher = only sessions you start with `ccauth claude -p %s` (settings files untouched)\n", name)
-				fmt.Fprintln(os.Stderr, "  project  = Claude Code sessions in the current repository (.claude/settings.local.json)")
-				fmt.Fprintln(os.Stderr, "  global   = every Claude Code session (~/.claude/settings.json)")
-				use = askChoice(r, "Use", []string{"launcher", "project", "global"}, "launcher")
-			}
-			switch use {
+			// Wire it into Claude Code as chosen.
+			use := ""
+			switch a.Use {
 			case "launcher":
-				fmt.Fprintf(os.Stderr, "\nStart gateway sessions with:  ccauth claude -p %s\n", name)
-				fmt.Fprintf(os.Stderr, "Tip:  alias claude-work='ccauth claude -p %s'   (plain `claude` keeps your own subscription)\n", name)
+				use = ui.Cmd("ccauth claude -p "+name) + ui.Hint("  (settings files untouched)")
 			default:
 				path := claudeSettingsPath()
-				if use == "project" {
+				if a.Use == "project" {
 					cwd, err := os.Getwd()
 					if err != nil {
 						return err
@@ -205,22 +124,84 @@ func newSetupCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("failed to update %s: %w", path, err)
 				}
-				fmt.Fprintf(os.Stderr, "\n✓ Merged wiring into %s (undo with `ccauth unwire%s`)\n", path, map[bool]string{true: " --project"}[use == "project"])
+				undo := "ccauth unwire"
+				if a.Use == "project" {
+					undo += " --project"
+				}
+				ui.OK(errw, "Wired Claude Code in %s %s", ui.Val(path), ui.Hint("(undo: "+undo+")"))
 				printNotes(notes)
+				use = ui.Val(path)
 			}
 
-			if len(gi.Notes(resolved)) > 0 {
-				fmt.Fprintf(os.Stderr, "\nGateway-side setup for %s:\n", gi.Name)
-				for _, n := range gi.Notes(resolved) {
-					fmt.Fprintf(os.Stderr, "  • %s\n", n)
+			// Summary: what was set up and what the user must do.
+			gi, _ := gateway.Get(resolved.Gateway)
+			rows := [][2]string{
+				{"Identity", identityLabel(resolved)},
+				{"Gateway", fmt.Sprintf("%s %s", gi.Name, ui.Val(resolved.GatewayOpts.BaseURL))},
+				{"Credential", fmt.Sprintf("%s · %s token", resolved.Mode, resolved.OAuth.Credential)},
+				{"Claude Code", use},
+			}
+			if resolved.OAuth.Flow == config.FlowAuthCode {
+				uri, portMatters := resolved.RedirectURIToRegister()
+				where := "register in your IdP app"
+				if resolved.Provider == config.ProviderEntra {
+					where = "Entra → Authentication → Mobile and desktop applications"
+				}
+				note := ""
+				if !portMatters {
+					note = ui.Hint("  any port matches")
+				}
+				rows = append(rows, [2]string{"Redirect URI", ui.Val(uri) + note + "\n" + strings.Repeat(" ", len("Redirect URI")+2) + ui.Hint(where)})
+			}
+			ui.Card(errw, "Profile "+name, ui.KV(rows...)...)
+
+			if notes := gi.Notes(resolved); len(notes) > 0 {
+				ui.Heading(errw, "Gateway-side setup for "+gi.Name)
+				for _, n := range notes {
+					ui.Info(errw, "%s", n)
 				}
 			}
-			fmt.Fprintf(os.Stderr, "\nNext: run `ccauth login --profile %s`, then start Claude Code.\n", name)
+
+			ui.Heading(errw, "Next steps")
+			ui.Println(errw, "  1. "+ui.Cmd("ccauth login -p "+name)+ui.Hint("   sign in once (browser)"))
+			switch a.Use {
+			case "launcher":
+				ui.Println(errw, "  2. "+ui.Cmd("ccauth claude -p "+name)+ui.Hint("   start Claude Code on the gateway"))
+				ui.Println(errw, "     "+ui.Hint("tip: ")+ui.Cmd(fmt.Sprintf("alias claude-work='ccauth claude -p %s'", name))+ui.Hint("  — plain `claude` keeps your own subscription"))
+			default:
+				ui.Println(errw, "  2. "+ui.Cmd("claude")+ui.Hint("   start Claude Code; `/status` should show apiKeyHelper"))
+			}
+			ui.Println(errw, "     "+ui.Hint("Claude Desktop too: ")+ui.Cmd("ccauth desktop apply -p "+name))
 			return nil
 		},
 	}
-	c.Flags().BoolVar(&write, "write", false, "also merge the wiring into ~/.claude/settings.json")
+	c.Flags().BoolVar(&write, "write", false, "wire the profile into ~/.claude/settings.json (every session) without asking")
+	c.Flags().BoolVar(&accessible, "accessible", false, "plain prompts for screen readers (also: ACCESSIBLE=1)")
 	return c
+}
+
+// identityLabel names the IdP compactly for the summary card.
+func identityLabel(p config.Profile) string {
+	switch p.Provider {
+	case config.ProviderEntra:
+		return providerLabel(p.Provider) + "  " + ui.Hint("tenant "+p.OAuth.TenantID)
+	case config.ProviderOIDC:
+		return providerLabel(p.Provider) + "  " + ui.Hint(p.Issuer())
+	default:
+		return providerLabel(p.Provider)
+	}
+}
+
+// providerLabel is a provider's display name.
+func providerLabel(p config.Provider) string {
+	switch p {
+	case config.ProviderEntra:
+		return "Microsoft Entra ID"
+	case config.ProviderGoogle:
+		return "Google Workspace"
+	default:
+		return "OpenID Connect"
+	}
 }
 
 func newInitCmd() *cobra.Command {
@@ -239,7 +220,7 @@ func newInitCmd() *cobra.Command {
 			if err := os.WriteFile(path, []byte(exampleConfig), 0o600); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "Wrote example config to %s — edit it, then run `ccauth login`.\n", path)
+			ui.OK(os.Stderr, "Wrote an example config to %s — edit it, then run %s", ui.Val(path), ui.Cmd("ccauth login"))
 			return nil
 		},
 	}
@@ -288,9 +269,9 @@ file, use ` + "`ccauth claude`" + `.`,
 			if err != nil {
 				return fmt.Errorf("failed to update %s: %w", path, err)
 			}
-			fmt.Fprintf(os.Stderr, "Merged wiring for %q into %s\n", name, path)
+			ui.OK(os.Stderr, "Wired profile %s into %s", ui.Bold(name), ui.Val(path))
 			if project {
-				fmt.Fprintln(os.Stderr, "Claude Code runs a project-level apiKeyHelper only after you trust the folder.")
+				ui.Info(os.Stderr, "Claude Code runs a project-level apiKeyHelper only after you trust the folder.")
 			}
 			printNotes(notes)
 			return nil
@@ -324,9 +305,9 @@ subscription or API key.`,
 				return fmt.Errorf("failed to update %s: %w", path, err)
 			}
 			if len(removed) == 0 {
-				fmt.Fprintf(os.Stderr, "No ccauth wiring found in %s\n", path)
+				ui.Info(os.Stderr, "No ccauth wiring found in %s", ui.Val(path))
 			} else {
-				fmt.Fprintf(os.Stderr, "Removed %s from %s\n", strings.Join(removed, ", "), path)
+				ui.OK(os.Stderr, "Removed %s from %s", strings.Join(removed, ", "), ui.Val(path))
 			}
 			printNotes(notes)
 			return nil
@@ -362,7 +343,7 @@ func wireTarget(project bool, dir string) (string, error) {
 // printNotes prints wiring notes (migrations, precedence conflicts) to stderr.
 func printNotes(notes []string) {
 	for _, n := range notes {
-		fmt.Fprintf(os.Stderr, "  ⚠ %s\n", n)
+		ui.Warn(os.Stderr, "%s", n)
 	}
 }
 
@@ -374,32 +355,6 @@ func isTTY() bool {
 		return false
 	}
 	return fi.Mode()&os.ModeCharDevice != 0
-}
-
-func ask(r *bufio.Reader, prompt, def string) string {
-	if def != "" {
-		fmt.Fprintf(os.Stderr, "%s [%s]: ", prompt, def)
-	} else {
-		fmt.Fprintf(os.Stderr, "%s: ", prompt)
-	}
-	line, _ := r.ReadString('\n')
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return def
-	}
-	return line
-}
-
-func askChoice(r *bufio.Reader, prompt string, choices []string, def string) string {
-	for {
-		v := ask(r, fmt.Sprintf("%s (%s)", prompt, strings.Join(choices, "/")), def)
-		for _, c := range choices {
-			if strings.EqualFold(v, c) {
-				return c
-			}
-		}
-		fmt.Fprintf(os.Stderr, "  please choose one of: %s\n", strings.Join(choices, ", "))
-	}
 }
 
 func firstNonEmpty(vals ...string) string {

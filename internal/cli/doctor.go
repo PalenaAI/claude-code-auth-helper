@@ -18,6 +18,7 @@ import (
 	"github.com/PalenaAI/claude-code-auth-helper/internal/credential"
 	"github.com/PalenaAI/claude-code-auth-helper/internal/gateway"
 	"github.com/PalenaAI/claude-code-auth-helper/internal/store"
+	"github.com/PalenaAI/claude-code-auth-helper/internal/ui"
 )
 
 func newDoctorCmd() *cobra.Command {
@@ -29,7 +30,7 @@ func newDoctorCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			out := cmd.OutOrStdout()
 			ok := true
-			line := func(status, msg string) { fmt.Fprintf(out, "%s %s\n", status, msg) }
+			line := func(status, msg string) { ui.Status(out, status, msg) }
 
 			// 1. Config file.
 			if _, err := os.Stat(config.Path()); err != nil {
@@ -89,10 +90,11 @@ func newDoctorCmd() *cobra.Command {
 
 			// 5. Wiring.
 			js, _ := settingsJSON(name, prof)
-			fmt.Fprintf(out, "\nClaude Code wiring for %s:\n%s\n", claudeSettingsPath(), js)
+			ui.Heading(out, "Claude Code wiring for "+claudeSettingsPath())
+			fmt.Fprintln(out, js)
 
 			// 6. What Claude Code will actually use (file-based settings + env).
-			fmt.Fprintln(out, "\nClaude Code settings:")
+			ui.Heading(out, "Claude Code")
 			cwd, _ := os.Getwd()
 			layers := loadClaudeLayers(claudeManagedDir(), cwd, claudeSettingsPath())
 			findings := checkClaudeCode(layers, os.Getenv, name)
@@ -120,16 +122,16 @@ func newDoctorCmd() *cobra.Command {
 			}
 
 			// Claude Desktop (third-party mode) is configured separately.
-			fmt.Fprintln(out, "\nClaude Desktop:")
+			ui.Heading(out, "Claude Desktop")
 			for _, f := range desktopFindings() {
 				line(f.Status, f.Msg)
 			}
 
 			// 7. Gateway-side checklist.
 			if gi, found := gateway.Get(prof.Gateway); found && len(gi.Notes(prof)) > 0 {
-				fmt.Fprintf(out, "\nGateway-side setup for %s:\n", gi.Name)
+				ui.Heading(out, "Gateway-side setup for "+gi.Name)
 				for _, n := range gi.Notes(prof) {
-					fmt.Fprintf(out, "  • %s\n", n)
+					ui.Info(out, "%s", n)
 				}
 			}
 
@@ -148,7 +150,8 @@ func newDoctorCmd() *cobra.Command {
 			}
 
 			if !ok {
-				fmt.Fprintln(os.Stderr, "\nSome checks need attention (see ✗/⚠ above).")
+				ui.Println(os.Stderr)
+				ui.Warn(os.Stderr, "Some checks need attention (see %s / %s above).", ui.Glyph("✗"), ui.Glyph("⚠"))
 			}
 			return nil
 		},

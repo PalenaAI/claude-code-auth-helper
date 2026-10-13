@@ -6,10 +6,10 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/PalenaAI/claude-code-auth-helper/internal/cli"
+	"github.com/PalenaAI/claude-code-auth-helper/internal/ui"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -17,7 +17,9 @@ var version = "dev"
 
 func main() {
 	if err := cli.NewRootCmd(version).Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "ccauth: "+err.Error())
+		// Colors are stripped automatically when stderr isn't a terminal
+		// (e.g. when Claude Code runs ccauth as its apiKeyHelper).
+		ui.Fail(os.Stderr, "ccauth: %s", err)
 		os.Exit(1)
 	}
 }
