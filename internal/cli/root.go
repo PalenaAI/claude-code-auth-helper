@@ -50,6 +50,7 @@ Use it from Claude Code in one of three ways:
 		newWireCmd(),
 		newUnwireCmd(),
 		newClaudeCmd(),
+		newDesktopCmd(),
 		newConfigCmd(),
 		newDoctorCmd(),
 		newGatewaysCmd(),

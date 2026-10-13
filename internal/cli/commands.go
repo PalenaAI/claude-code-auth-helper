@@ -56,7 +56,8 @@ func newLoginCmd() *cobra.Command {
 }
 
 func newTokenCmd() *cobra.Command {
-	return &cobra.Command{
+	var minLifetime time.Duration
+	c := &cobra.Command{
 		Use:   "token",
 		Short: "Print the current gateway credential (this is what Claude Code calls)",
 		Long: `Prints the credential Claude Code should send to the gateway, to stdout.
@@ -72,7 +73,7 @@ non-zero telling you to run ` + "`ccauth login`" + `.`,
 			if err != nil {
 				return err
 			}
-			cred, err := emitCredential(prof, st, name)
+			cred, err := emitCredentialFor(prof, st, name, minLifetime)
 			if err != nil {
 				return err
 			}
@@ -80,14 +81,34 @@ non-zero telling you to run ` + "`ccauth login`" + `.`,
 			return nil
 		},
 	}
+	c.Flags().DurationVar(&minLifetime, "min-lifetime", 0,
+		"require the token to stay valid this long (Claude Desktop's helper passes its cache TTL); default: Claude Code's CLAUDE_CODE_API_KEY_HELPER_TTL_MS")
+	return c
 }
 
 // emitCredential returns the credential, escalating to an interactive browser
 // login when silent refresh fails and the profile/environment allow it.
 func emitCredential(prof config.Profile, st store.Store, name string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	return emitCredentialFor(prof, st, name, 0)
+}
+
+// helperContext is the CLAUDE_HELPER_CONTEXT Claude Desktop sets when it runs
+// ccauth as its credential helper ("" when called by Claude Code or a user).
+func helperContext() string { return os.Getenv("CLAUDE_HELPER_CONTEXT") }
+
+// emitTimeout bounds a silent refresh. Desktop kills a mid-session refresh after
+// 20s, so stay under it there; everyone else keeps 30s.
+func emitTimeout() time.Duration {
+	if helperContext() == "mid-session-refresh" {
+		return 15 * time.Second
+	}
+	return 30 * time.Second
+}
+
+func emitCredentialFor(prof config.Profile, st store.Store, name string, minLifetime time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), emitTimeout())
 	defer cancel()
-	cred, err := credential.Emit(ctx, prof, st, name)
+	cred, err := credential.EmitFor(ctx, prof, st, name, minLifetime)
 	if err == nil {
 		return cred, nil
 	}
@@ -102,12 +123,18 @@ func emitCredential(prof config.Profile, st store.Store, name string) (string, e
 	}
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel2()
-	return credential.Emit(ctx2, prof, st, name)
+	return credential.EmitFor(ctx2, prof, st, name, minLifetime)
 }
 
 // canAutoLogin decides whether `ccauth token` may open a browser to re-auth.
 func canAutoLogin(prof config.Profile) bool {
 	if os.Getenv("CCAUTH_NONINTERACTIVE") != "" || os.Getenv("CI") != "" {
+		return false
+	}
+	// Claude Desktop marks each helper run; it expects a browser only when the
+	// user is actively signing in, and a silent path (or a non-zero exit) for
+	// mid-session refreshes, scheduled tasks and background runs.
+	if c := helperContext(); c != "" && c != "interactive" {
 		return false
 	}
 	if !prof.InteractiveHelper() {

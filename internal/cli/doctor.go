@@ -119,6 +119,12 @@ func newDoctorCmd() *cobra.Command {
 				line("•", "managed settings pushed as an MDM profile / registry policy are not inspected; check `/status` in Claude Code")
 			}
 
+			// Claude Desktop (third-party mode) is configured separately.
+			fmt.Fprintln(out, "\nClaude Desktop:")
+			for _, f := range desktopFindings() {
+				line(f.Status, f.Msg)
+			}
+
 			// 7. Gateway-side checklist.
 			if gi, found := gateway.Get(prof.Gateway); found && len(gi.Notes(prof)) > 0 {
 				fmt.Fprintf(out, "\nGateway-side setup for %s:\n", gi.Name)

@@ -33,6 +33,15 @@ var ErrLoginRequired = errors.New("interactive login required")
 // Emit returns the credential for the profile, refreshing/exchanging as needed,
 // and persists any updated session.
 func Emit(ctx context.Context, prof config.Profile, st store.Store, profileName string) (string, error) {
+	return EmitFor(ctx, prof, st, profileName, 0)
+}
+
+// EmitFor is Emit with a caller-supplied cache window: the credential must stay
+// valid for minLifetime plus the usual skew. Claude Desktop's helper passes its
+// inferenceCredentialHelperTtlSec this way (it can't set Claude Code's TTL env);
+// 0 keeps Emit's behavior.
+func EmitFor(ctx context.Context, prof config.Profile, st store.Store, profileName string, minLifetime time.Duration) (string, error) {
+	need := lifetimeFor(minLifetime)
 	sess, err := st.Load(profileName)
 	if err != nil {
 		if errors.Is(err, store.ErrNoSession) {
@@ -40,7 +49,7 @@ func Emit(ctx context.Context, prof config.Profile, st store.Store, profileName 
 		}
 		return "", err
 	}
-	cred, changed, err := ensure(ctx, prof, sess, requiredLifetime())
+	cred, changed, err := ensure(ctx, prof, sess, need)
 	if err != nil {
 		return "", err
 	}
@@ -67,6 +76,16 @@ func requiredLifetime() time.Duration {
 				need = d
 			}
 		}
+	}
+	return need
+}
+
+// lifetimeFor is the remaining lifetime a token needs: Claude Code's cache window
+// (requiredLifetime) or, when larger, the caller's minLifetime plus skew.
+func lifetimeFor(minLifetime time.Duration) time.Duration {
+	need := requiredLifetime()
+	if d := minLifetime + defaultSkew; minLifetime > 0 && d > need {
+		need = d
 	}
 	return need
 }

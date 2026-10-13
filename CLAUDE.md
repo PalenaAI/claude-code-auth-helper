@@ -24,6 +24,7 @@ Go (single static binary). Deps: `spf13/cobra` (CLI), `coreos/go-oidc/v3` +
 - `internal/store` — keychain + `0600`-file session store
 - `internal/gateway` — per-gateway presets + Claude Code wiring
 - `internal/jwtutil` — unverified expiry/claims reader
+- `internal/desktop` — Claude Desktop 3P config: settings builder, configLibrary read/write, MDM/JSON exports
 - `internal/cli` — commands
 - `examples/` — LiteLLM config, Portkey notes, Bifrost plugin (own go.mod), broker contract
 
@@ -56,6 +57,11 @@ Go (single static binary). Deps: `spf13/cobra` (CLI), `coreos/go-oidc/v3` +
   `wire --write` (user). All come from `wiringSettings`; `wire` records what it
   wrote in `<state>/wiring.json` and `unwire` removes only that. Custom headers go
   through `config.ValidateHeader` (no CR/LF, no Authorization/x-api-key).
+- **Claude Desktop** (DESIGN §7.3) is configured only through its own keys in
+  `<Claude-3p>/configLibrary` (or MDM), never apiKeyHelper. ccauth touches only
+  its own `ccauth: <profile>` entries + `appliedId`, never while Desktop runs.
+  `token` treats `CLAUDE_HELPER_CONTEXT` ≠ `interactive` as non-interactive; with
+  the variable unset the CLI path must stay unchanged.
 - Never log tokens. `ccauth` parses JWTs **unverified** only to read `exp`;
   cryptographic verification is the gateway's job.
 

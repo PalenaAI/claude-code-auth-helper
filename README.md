@@ -96,6 +96,21 @@ Pick how far the gateway wiring reaches. Plain `claude` keeps your own claude.ai
 
 Extra gateway headers (e.g. a team header): `gateway_opts.headers` in the profile for every request, or `-H "x-team: data"` on `ccauth claude` / `ccauth wire` (repeatable; overrides a profile header of the same name). `ccauth claude --isolated` also gives work its own Claude Code config dir (`~/.claude-<profile>`: history, memory, MCP servers, plugins). `ccauth doctor` shows which credential Claude Code uses in the current directory.
 
+### Claude Desktop
+
+Claude Desktop doesn't use `apiKeyHelper`; it reaches a gateway only in its third-party inference mode, configured with its own keys. `ccauth desktop` writes that configuration from the same profile:
+
+```bash
+ccauth desktop apply -p work      # quit Claude Desktop first; next launch uses the gateway
+ccauth desktop personal           # next launch uses your Claude.ai sign-in again
+ccauth desktop status             # what Desktop will use at its next launch
+ccauth desktop export -p work --format mobileconfig -o work.mobileconfig   # or json / reg, for IT
+```
+
+- The switch is app-wide (Chat, Cowork and Code tabs), not per project, and takes effect at the next launch. Gateway mode has no claude.ai web/mobile sync or Anthropic cloud sessions.
+- **Credential:** `--auth sso` (default for passthrough profiles) lets Desktop sign in to your IdP itself, reusing the `http://localhost/callback` registration; add `--broker` on Entra to sign in through Company Portal. `--auth helper` (default for exchange mode and Google) makes Desktop run `ccauth token`, like Claude Code does.
+- ccauth only adds its own named entries (`ccauth: <profile>`) to Desktop's configuration library, so configurations you made in Desktop's own window stay. An MDM profile or registry policy for Claude Desktop overrides the library; `apply` warns when one is present.
+
 ## Commands
 
 | Command | What it does |
@@ -108,6 +123,7 @@ Extra gateway headers (e.g. a team header): `gateway_opts.headers` in the profil
 | `ccauth claude [-H hdr] [--isolated] [-- claude-flags]` | Start Claude Code on the gateway for one session, without touching settings files |
 | `ccauth wire [--write\|--project] [-H hdr]` | Print the wiring, or merge it into `~/.claude/settings.json` / this repo's `.claude/settings.local.json` |
 | `ccauth unwire [--project]` | Remove ccauth's wiring, keeping everything else |
+| `ccauth desktop apply\|personal\|export\|status` | Point Claude Desktop at the gateway (or back to Claude.ai), or export its configuration for import/MDM |
 | `ccauth config path\|show\|sync` | Inspect the config layers (user/embedded/managed/remote) or pull remote config |
 | `ccauth doctor [--probe]` | Diagnose config + session, show which credential Claude Code uses here, flag anything that bypasses or blocks the helper, and print the gateway-side checklist |
 | `ccauth logout` | Delete the stored session for a profile |

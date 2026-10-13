@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ccauth desktop apply|personal|export|status` configures Claude Desktop's
+  third-party inference mode for the profile's gateway: `apply` adds/updates a
+  `ccauth: <profile>` entry in Desktop's configuration library and applies it,
+  `personal` switches Desktop back to the Claude.ai sign-in, and `export` writes
+  JSON (Import configuration), `.mobileconfig` or `.reg` for IT. Desktop signs in
+  to the IdP itself (`--auth sso`, optionally `--broker` on Entra) or runs
+  `ccauth token` as its credential helper (`--auth helper`). `doctor` shows
+  Desktop's applied configuration.
+- `ccauth token --min-lifetime <duration>` makes the token outlive a caller's
+  cache window (used by Claude Desktop's helper).
+
+### Changed
+
+- When Claude Desktop runs `ccauth token` (`CLAUDE_HELPER_CONTEXT` set), browser
+  re-login only happens in its `interactive` context and a mid-session refresh
+  stays within Desktop's 20 s limit. Calls from Claude Code are unchanged.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added

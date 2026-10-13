@@ -45,3 +45,16 @@ func TestRemainingUsesFallbackForOpaqueToken(t *testing.T) {
 		t.Errorf("remaining() = %v, want 0", d)
 	}
 }
+
+func TestLifetimeFor(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_API_KEY_HELPER_TTL_MS", "600000") // 10 min → 12 min needed
+	if got := lifetimeFor(0); got != 12*time.Minute {
+		t.Errorf("lifetimeFor(0) = %v, want Claude Code's 12m", got)
+	}
+	if got := lifetimeFor(30 * time.Minute); got != 32*time.Minute {
+		t.Errorf("lifetimeFor(30m) = %v, want 32m", got)
+	}
+	if got := lifetimeFor(time.Minute); got != 12*time.Minute {
+		t.Errorf("a smaller minLifetime must not lower the requirement, got %v", got)
+	}
+}

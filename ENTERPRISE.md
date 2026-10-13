@@ -158,6 +158,27 @@ make cross     # dist/ccauth-<os>-<arch> — distribute via your package channel
 
 ---
 
+## Claude Desktop
+
+Claude Desktop reaches the gateway only in its third-party inference mode, which
+IT configures through the `com.anthropic.claudefordesktop` preference domain
+(macOS) or `HKLM`/`HKCU\SOFTWARE\Policies\Claude` (Windows). Generate the
+profile from the same ccauth profile:
+
+```bash
+ccauth desktop export -p corp --format mobileconfig -o claude-desktop.mobileconfig   # Jamf, Kandji, …
+ccauth desktop export -p corp --format reg --machine -o claude-desktop.reg           # GPO / Intune
+ccauth desktop export -p corp --format json -o claude-desktop.json                   # Import configuration / bootstrap body
+```
+
+With `--auth sso` (the default for passthrough profiles) Desktop signs users in
+to the IdP itself and needs no ccauth on the device; add `--broker` on Entra to
+sign in through Company Portal / Web Account Manager, which satisfies
+device-based Conditional Access. With `--auth helper`, pass `--helper-path` with
+the path ccauth has on the managed devices. Set `disableDeploymentModeChooser`
+in your profile if users must not fall back to a Claude.ai sign-in. Without MDM,
+users run `ccauth desktop apply` themselves.
+
 ## Packaging
 
 Any of these compose with the options above:

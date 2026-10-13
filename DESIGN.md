@@ -290,6 +290,59 @@ offers three reaches, all built from the same `wiringSettings`:
   it triggers never opens a browser) and reports `authMethod` for the current
   directory.
 
+### 7.3 Claude Desktop
+
+Claude Desktop never runs `apiKeyHelper` or reads Claude Code's credential env;
+it reaches a gateway only in **third-party inference mode** ("Claude Desktop on
+3P"), selected by its own keys (`inferenceProvider: "gateway"`,
+`inferenceGatewayBaseUrl`, `inferenceCredentialKind`, …). Sources, highest first:
+MDM profile / `HKLM` / `HKCU` policy / root-owned
+`/etc/claude-desktop/managed-settings.json`, then the per-user
+**configuration library** that Desktop's own "Configure Third-Party Inference"
+window writes:
+
+```
+<Claude-3p>/configLibrary/_meta.json   {"appliedId": "<uuid>", "entries": [{"id","name","provider"?,"note"?}], …}
+<Claude-3p>/configLibrary/<uuid>.json  flat keys, native JSON values
+```
+
+(`<Claude-3p>` = `~/Library/Application Support/Claude-3p`,
+`%LOCALAPPDATA%\Claude-3p`, `~/.config/Claude-3p`.) Desktop applies the entry
+named by `appliedId` at launch; an applied **empty** entry means no provider, so
+Desktop starts with the normal Claude.ai sign-in. Both behaviours were verified
+against Claude Desktop 2.7032.0 (logs `3P mode active { provider: 'gateway' }`,
+then `claude.ai account active and logged in`).
+
+`ccauth desktop` (`internal/desktop`):
+
+- **apply** upserts the entry named `ccauth: <profile>` (stable UUID) and sets
+  `appliedId`; **personal** applies an empty entry (reusing one if present). Both
+  keep every other entry and unknown `_meta.json` field, write atomically with
+  `0600`, refuse while Desktop runs (it rewrites `_meta.json` itself; `--force`
+  overrides) and warn when managed policy would override the library.
+- **Credential** (`--auth auto|sso|helper`):
+  - `sso` → `inferenceCredentialKind: "external-idp"` + `inferenceIdpOidc`
+    (`issuer` = the profile's issuer, `bearerTokenType` from `credential_token`,
+    `scopes` = the API scope; Desktop appends `offline_access` in access-token
+    mode, ccauth adds it in id-token mode; `redirectHost: "localhost"` to reuse
+    `http://localhost/callback`). `--broker` → `inferenceIdpAuthFlow: "broker"`
+    (Entra only). Needs Desktop 2.7032.0+.
+  - `helper` → `helper-script` running `ccauth token --profile <p>
+    --min-lifetime <ttl>` from an upgrade-stable path (Homebrew's
+    `<prefix>/bin/ccauth`, never the Cellar path), TTL 30m, timeout 240s so an
+    interactive re-login can finish.
+  - `auto` picks `sso` for passthrough public clients, else `helper` (exchange
+    mode needs the exchanged key; Google desktop clients need their secret).
+- **Helper contract in `token`:** `--min-lifetime` makes the token outlive
+  Desktop's cache window (`credential.EmitFor`). Desktop sets
+  `CLAUDE_HELPER_CONTEXT`; anything but `interactive` disables browser re-login,
+  and `mid-session-refresh` gets a 15s budget (Desktop kills it at 20s). Without
+  that variable — Claude Code, users — `token` behaves exactly as before.
+- **export** renders the same settings as JSON (Desktop's Import configuration /
+  bootstrap body), `.mobileconfig` (`com.anthropic.claudefordesktop`, every value
+  a string) or `.reg` (`REG_SZ` directly under `…\Policies\Claude`), with headers
+  in `inferenceCustomHeaders` and models in `inferenceModels` when discovery is off.
+
 ### 7.1 Layered configuration (enterprise / zero-config for users)
 
 For large orgs, no user should type a tenant/client ID. Config is merged from four
@@ -367,7 +420,7 @@ token choice). This keeps the flows uniform and the provider-specific surface ti
   LiteLLM and Portkey, and **absent** on Bifrost's data plane — hence exchange
   mode and the reference plugin.
 - Claude Code's `apiKeyHelper` applies to the **CLI, VS Code extension, Agent SDK,
-  and GitHub Actions** — **not** the Desktop app or cloud surfaces (Slack/web),
+  and GitHub Actions** — **not** the Desktop app (configured via `ccauth desktop`, §7.3) or cloud surfaces (Slack/web),
   which use different mechanisms.
 - Managed `forceLoginMethod` / `forceLoginOrgUUID` make Claude Code refuse
   `apiKeyHelper` at startup; orgs using ccauth must not set them for gateway users.
