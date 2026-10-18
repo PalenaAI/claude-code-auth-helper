@@ -58,6 +58,9 @@ Go (single static binary). Deps: `spf13/cobra` (CLI), `coreos/go-oidc/v3` +
   `wire --write` (user). All come from `wiringSettings`; `wire` records what it
   wrote in `<state>/wiring.json` and `unwire` removes only that. Custom headers go
   through `config.ValidateHeader` (no CR/LF, no Authorization/x-api-key).
+  `competingVars()` (AUTH_TOKEN, API_KEY, CLAUDE_CODE_USE_*) outrank the helper:
+  `wire` moves them into the record's `displaced` (written before the settings
+  file; `unwire` restores), the launcher overrides them with "" in `--settings`.
 - **Claude Desktop** (DESIGN §7.3) is configured only through its own keys in
   `<Claude-3p>/configLibrary` (or MDM), never apiKeyHelper. ccauth touches only
   its own `ccauth: <profile>` entries + `appliedId`, never while Desktop runs.

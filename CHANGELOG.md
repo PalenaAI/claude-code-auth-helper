@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Wiring no longer silently does nothing when the settings file already sets a
+  competing credential. `ccauth wire --write` / `setup` kept an existing
+  `ANTHROPIC_AUTH_TOKEN` (or `ANTHROPIC_API_KEY`, `CLAUDE_CODE_USE_BEDROCK/VERTEX/
+  FOUNDRY`) in the env block, and Claude Code uses those ahead of `apiKeyHelper`.
+  They are now moved out of the file ccauth writes (kept in ccauth's `0600` state
+  so `ccauth unwire` restores them), `ccauth claude` overrides them with empty
+  values for its session, and `wire --project` / `setup` warn when one is set in
+  `~/.claude/settings.json` or the shell, where project settings can't override it.
+
 ## [1.0.0] - 2026-10-13
 
 First stable release.

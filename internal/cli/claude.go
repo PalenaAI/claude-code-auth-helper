@@ -117,7 +117,15 @@ func writeLaunchSettings(name string, prof config.Profile, extra []gateway.Heade
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	b, err := json.MarshalIndent(wiringSettings(name, prof, extra...), "", "  ")
+	settings := wiringSettings(name, prof, extra...)
+	// An empty value counts as unset in Claude Code, and --settings outranks
+	// every settings file, so this keeps a token or cloud-provider switch from
+	// ~/.claude/settings.json or the project from taking over this session.
+	env := settings["env"].(map[string]string)
+	for _, k := range competingVars() {
+		env[k] = ""
+	}
+	b, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return "", err
 	}
@@ -137,7 +145,7 @@ func writeLaunchSettings(name string, prof config.Profile, extra []gateway.Heade
 // sees it either way), and points CLAUDE_CONFIG_DIR at configDir when set.
 func launchEnv(base []string, gw map[string]string, configDir string) (env, dropped []string) {
 	drop := map[string]bool{}
-	for _, k := range append(append([]string{}, shadowingCredentialVars...), cloudProviderVars...) {
+	for _, k := range competingVars() {
 		drop[k] = true
 	}
 	override := map[string]string{}

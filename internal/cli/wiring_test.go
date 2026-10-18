@@ -256,3 +256,128 @@ func TestAuthStatusFinding(t *testing.T) {
 		}
 	}
 }
+
+// Regression: a user's settings.json already had ANTHROPIC_AUTH_TOKEN, which
+// outranks apiKeyHelper, so wiring kept it and ccauth was never called.
+func TestWireMovesCompetingCredentialsAndUnwireRestores(t *testing.T) {
+	state := isolateState(t)
+	path := filepath.Join(t.TempDir(), "settings.json")
+	original := `{"theme":"dark","env":{"ANTHROPIC_AUTH_TOKEN":"personal-token","CLAUDE_CODE_USE_BEDROCK":"1","MY_VAR":"keep"}}`
+	writeFile(t, path, original)
+
+	notes, err := wireFile(path, "work", workProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := readJSON(t, path)["env"].(map[string]any)
+	for _, k := range []string{"ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK"} {
+		if _, set := env[k]; set {
+			t.Errorf("%s still in settings: helper would be ignored", k)
+		}
+		if !strings.Contains(strings.Join(notes, "\n"), "moved "+k) {
+			t.Errorf("no note about moving %s: %v", k, notes)
+		}
+	}
+	if env["MY_VAR"] != "keep" || env["ANTHROPIC_BASE_URL"] != "https://gw.example.com" {
+		t.Errorf("env after wire = %v", env)
+	}
+	if fi, err := os.Stat(filepath.Join(state, "wiring.json")); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("wiring record must be 0600 (it holds the moved token): %v %v", fi, err)
+	}
+
+	if _, _, err := unwireFile(path, false); err != nil {
+		t.Fatal(err)
+	}
+	var want map[string]any
+	_ = json.Unmarshal([]byte(original), &want)
+	if got := readJSON(t, path); !reflect.DeepEqual(got, want) {
+		t.Errorf("after unwire = %v, want the original %v", got, want)
+	}
+}
+
+func TestRewireKeepsEarlierDisplacedValues(t *testing.T) {
+	isolateState(t)
+	path := filepath.Join(t.TempDir(), "settings.json")
+	writeFile(t, path, `{"env":{"ANTHROPIC_AUTH_TOKEN":"personal-token"}}`)
+	if _, err := wireFile(path, "work", workProfile); err != nil {
+		t.Fatal(err)
+	}
+	// Second wire: the token is no longer in the file, but must not be forgotten.
+	if _, err := wireFile(path, "work", workProfile); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := unwireFile(path, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := readJSON(t, path)["env"].(map[string]any)["ANTHROPIC_AUTH_TOKEN"]; got != "personal-token" {
+		t.Errorf("token after re-wire + unwire = %v", got)
+	}
+}
+
+func TestUnwireKeepsCredentialSetAgain(t *testing.T) {
+	isolateState(t)
+	path := filepath.Join(t.TempDir(), "settings.json")
+	writeFile(t, path, `{"env":{"ANTHROPIC_AUTH_TOKEN":"old"}}`)
+	if _, err := wireFile(path, "work", workProfile); err != nil {
+		t.Fatal(err)
+	}
+	s := readJSON(t, path)
+	s["env"].(map[string]any)["ANTHROPIC_AUTH_TOKEN"] = "new"
+	b, _ := json.Marshal(s)
+	writeFile(t, path, string(b))
+
+	_, notes, err := unwireFile(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readJSON(t, path)["env"].(map[string]any)["ANTHROPIC_AUTH_TOKEN"]; got != "new" {
+		t.Errorf("unwire overwrote the token set after wiring: %v", got)
+	}
+	if !strings.Contains(strings.Join(notes, "\n"), "set again") {
+		t.Errorf("notes = %v", notes)
+	}
+}
+
+func TestLaunchSettingsNeutralizeCompetingCredentials(t *testing.T) {
+	isolateState(t)
+	path, err := writeLaunchSettings("work", workProfile, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := readJSON(t, path)["env"].(map[string]any)
+	for _, k := range competingVars() {
+		if v, set := env[k]; !set || v != "" {
+			t.Errorf("--settings env must set %s to \"\" (got %v, set=%v)", k, v, set)
+		}
+	}
+	if env["ANTHROPIC_BASE_URL"] != "https://gw.example.com" {
+		t.Errorf("gateway env lost: %v", env)
+	}
+}
+
+func TestCompetingElsewhere(t *testing.T) {
+	isolateState(t)
+	cc := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cc)
+	user := filepath.Join(cc, "settings.json")
+	writeFile(t, user, `{"env":{"ANTHROPIC_AUTH_TOKEN":"x","ANTHROPIC_API_KEY":""}}`)
+	project := filepath.Join(t.TempDir(), ".claude", "settings.local.json")
+	noEnv := func(string) string { return "" }
+
+	got := strings.Join(competingElsewhere(project, noEnv), "\n")
+	if !strings.Contains(got, "ANTHROPIC_AUTH_TOKEN") || strings.Contains(got, "ANTHROPIC_API_KEY") {
+		t.Errorf("project wiring warnings = %q (an empty value is unset and must not warn)", got)
+	}
+	if got := competingElsewhere(user, noEnv); len(got) != 0 {
+		t.Errorf("the wired file itself is handled by wireFile, got %v", got)
+	}
+	shell := func(k string) string {
+		if k == "ANTHROPIC_API_KEY" {
+			return "sk-x"
+		}
+		return ""
+	}
+	if got := strings.Join(competingElsewhere(user, shell), "\n"); !strings.Contains(got, "shell exports ANTHROPIC_API_KEY") {
+		t.Errorf("shell warning missing: %q", got)
+	}
+}

@@ -124,6 +124,7 @@ func newSetupCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("failed to update %s: %w", path, err)
 				}
+				notes = append(notes, competingElsewhere(path, os.Getenv)...)
 				undo := "ccauth unwire"
 				if a.Use == "project" {
 					undo += " --project"
@@ -269,6 +270,7 @@ file, use ` + "`ccauth claude`" + `.`,
 			if err != nil {
 				return fmt.Errorf("failed to update %s: %w", path, err)
 			}
+			notes = append(notes, competingElsewhere(path, os.Getenv)...)
 			ui.OK(os.Stderr, "Wired profile %s into %s", ui.Bold(name), ui.Val(path))
 			if project {
 				ui.Info(os.Stderr, "Claude Code runs a project-level apiKeyHelper only after you trust the folder.")

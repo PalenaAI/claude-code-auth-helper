@@ -275,6 +275,13 @@ offers three reaches, all built from the same `wiringSettings`:
   `CLAUDE_CODE_USE_*` from the child environment (they outrank the helper), sets
   the gateway env there too, and on Unix `exec`s `claude` so it owns the terminal
   and signals. `--isolated` adds `CLAUDE_CONFIG_DIR=~/.claude-<profile>`.
+- **Competing credentials.** `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY` and
+  `CLAUDE_CODE_USE_*` outrank `apiKeyHelper`. `wire` moves them out of the file
+  it writes into the wiring record (`displaced`, restored by `unwire`); the
+  launcher sets them to `""` in its `--settings` (verified with Claude Code
+  2.1.287: an empty value counts as unset, and `--settings` outranks every
+  settings file). Project-local settings could not be shown to override a
+  user-level token, so `wire --project` only warns about one.
 - **Unwire.** `wire` records what it wrote per file in `<state>/wiring.json`;
   `unwire` removes exactly those keys while they still hold that value (a key the
   user edited stays, with a note), and deletes an emptied project file. Wiring

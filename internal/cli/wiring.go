@@ -176,25 +176,77 @@ func wireFile(path, name string, prof config.Profile, extra ...gateway.Header) (
 		env[k] = v
 	}
 	notes := migrateEnv(env)
-	settings["env"] = env
-	for _, k := range shadowingCredentialVars {
-		if _, set := env[k]; set {
-			notes = append(notes, fmt.Sprintf("%s's env sets %s, which takes precedence over apiKeyHelper; remove it or ccauth will never be called", path, k))
+
+	// A credential or cloud-provider switch in the same env block outranks
+	// apiKeyHelper, so the wiring would silently do nothing. Move them out;
+	// the wiring record keeps them so `ccauth unwire` can put them back.
+	rec := wiringRecord{APIKeyHelper: helper, Env: written, Displaced: map[string]string{}}
+	if old, err := loadWiringRecords(); err == nil {
+		for k, v := range old[recordKey(path)].Displaced {
+			rec.Displaced[k] = v // keep what an earlier wire moved aside
 		}
+	}
+	for _, k := range competingVars() {
+		v, set := env[k]
+		if !set {
+			continue
+		}
+		rec.Displaced[k] = fmt.Sprint(v)
+		delete(env, k)
+		notes = append(notes, fmt.Sprintf("moved %s out of %s: it takes precedence over apiKeyHelper, so ccauth would never be called (`ccauth unwire` puts it back)", k, path))
+	}
+	if len(rec.Displaced) == 0 {
+		rec.Displaced = nil
+	}
+	settings["env"] = env
+
+	// Record first: once the file no longer holds a moved credential, the
+	// record is the only copy.
+	if err := recordWiring(path, rec); err != nil {
+		if rec.Displaced != nil {
+			return nil, fmt.Errorf("could not save the settings ccauth has to move aside, so %s was left unchanged: %w", path, err)
+		}
+		notes = append(notes, fmt.Sprintf("could not record the wiring for `ccauth unwire`: %v", err))
 	}
 	if err := writeSettings(path, settings); err != nil {
 		return nil, err
 	}
-	if err := recordWiring(path, wiringRecord{APIKeyHelper: helper, Env: written}); err != nil {
-		notes = append(notes, fmt.Sprintf("could not record the wiring for `ccauth unwire`: %v", err))
-	}
 	return notes, nil
+}
+
+// competingElsewhere lists credentials that would still outrank apiKeyHelper
+// from outside the wired file: the user settings file (for a project wiring)
+// and the shell environment. Claude Code doesn't let project settings override
+// them, so all ccauth can do is tell the user.
+func competingElsewhere(wiredPath string, getenv func(string) string) []string {
+	var out []string
+	if user := claudeSettingsPath(); recordKey(user) != recordKey(wiredPath) {
+		if s, err := readSettings(user); err == nil {
+			if env, ok := s["env"].(map[string]any); ok {
+				for _, k := range competingVars() {
+					if v, set := env[k]; set && fmt.Sprint(v) != "" {
+						out = append(out, fmt.Sprintf("%s sets %s, which outranks this wiring; remove it there (or use `ccauth wire --write`, which moves it aside)", user, k))
+					}
+				}
+			}
+		}
+	}
+	for _, k := range competingVars() {
+		if getenv(k) != "" {
+			out = append(out, fmt.Sprintf("your shell exports %s, which outranks apiKeyHelper; unset it before starting Claude Code (`ccauth claude` does this for you)", k))
+		}
+	}
+	return out
 }
 
 // wiringRecord is what ccauth last wrote into one settings file.
 type wiringRecord struct {
 	APIKeyHelper string            `json:"apiKeyHelper"`
 	Env          map[string]string `json:"env"`
+	// Displaced holds env values wire moved out of the file because they
+	// outrank apiKeyHelper (e.g. ANTHROPIC_AUTH_TOKEN); unwire restores them.
+	// The record file is 0600 in ccauth's state dir.
+	Displaced map[string]string `json:"displaced,omitempty"`
 }
 
 func wiringRecordPath() string { return filepath.Join(config.StateDir(), "wiring.json") }
@@ -293,6 +345,27 @@ func unwireFile(path string, isProject bool) (removed, notes []string, err error
 		if len(env) == 0 {
 			delete(settings, "env")
 		}
+	}
+	// Put back what wire moved aside, unless the user has set it again since.
+	if len(rec.Displaced) > 0 {
+		env, _ := settings["env"].(map[string]any)
+		if env == nil {
+			env = map[string]any{}
+		}
+		keys := make([]string, 0, len(rec.Displaced))
+		for k := range rec.Displaced {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if _, set := env[k]; set {
+				notes = append(notes, fmt.Sprintf("env.%s was set again since ccauth moved it aside; kept the current value", k))
+				continue
+			}
+			env[k] = rec.Displaced[k]
+			removed = append(removed, "restored env."+k)
+		}
+		settings["env"] = env
 	}
 	if !recorded && len(rec.Env) == 0 {
 		notes = append(notes, "no record of what ccauth wrote here and the helper's profile could not be resolved; check env for ANTHROPIC_BASE_URL and similar keys yourself")

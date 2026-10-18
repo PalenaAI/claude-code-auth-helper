@@ -30,6 +30,11 @@ var shadowingCredentialVars = []string{"ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KE
 // which outrank every Anthropic credential including apiKeyHelper.
 var cloudProviderVars = []string{"CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"}
 
+// competingVars are every variable that makes Claude Code ignore apiKeyHelper.
+func competingVars() []string {
+	return append(append([]string{}, shadowingCredentialVars...), cloudProviderVars...)
+}
+
 // claudeLayer is one Claude Code settings file that exists on disk.
 type claudeLayer struct {
 	Name    string // managed | project-local | project | user

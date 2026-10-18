@@ -204,7 +204,7 @@ ccauth config show     # merged config + per-profile source (secrets redacted)
 | `OIDC discovery … failed` | Bad issuer/tenant. Entra needs a **tenant GUID or verified domain**, not `common`. |
 | Google re-prompts weekly | Publish the OAuth consent screen — "Testing" apps get 7-day refresh tokens. |
 | Device flow blocked (Entra) | Conditional Access may block device-code. Use `flow = "auth_code"`. |
-| ccauth is never called | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY` or a `CLAUDE_CODE_USE_*` variable is set — they outrank `apiKeyHelper`. Unset them; `ccauth doctor` shows where they come from. |
+| ccauth is never called | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY` or a `CLAUDE_CODE_USE_*` variable is set; they outrank `apiKeyHelper`. `ccauth wire --write` moves them out of `~/.claude/settings.json` (`ccauth unwire` restores them) and `ccauth claude` overrides them for its session; one exported in your shell or set in the user settings while you use `wire --project` you have to remove yourself. `ccauth doctor` shows where they come from. |
 | Claude Code refuses `apiKeyHelper` at startup | Managed settings set `forceLoginMethod` / `forceLoginOrgUUID`. IT must remove them for gateway users. |
 | Helper in a repo's `.claude/settings.json` doesn't run | Claude Code runs project-level helpers only after you accept the workspace trust prompt. Prefer `ccauth wire --write` (user settings). |
 | Background tasks / haiku fail with "model not found" | The gateway doesn't serve Claude Code's default Haiku ID. Set `gateway_opts.haiku_model` and re-run `ccauth wire --write` (also migrates the deprecated `ANTHROPIC_SMALL_FAST_MODEL`). |
