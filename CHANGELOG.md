@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-18
+
 ### Fixed
 
 - Wiring no longer silently does nothing when the settings file already sets a
@@ -207,7 +209,8 @@ use `ccauth status --json` for scripts.
 - **Reference material:** `DESIGN.md`, `ENTERPRISE.md`, LiteLLM and Portkey
   examples, a Bifrost edge-auth plugin, and a token-exchange broker contract.
 
-[Unreleased]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/PalenaAI/claude-code-auth-helper/compare/v0.1.3...v0.1.4
