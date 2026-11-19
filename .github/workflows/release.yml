@@ -28,7 +28,7 @@ jobs:
     permissions:
       contents: write   # required to create the release
     steps:
-      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2
         with:
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
@@ -101,14 +101,14 @@ jobs:
       HOMEBREW_NO_ANALYTICS: 1
       HOMEBREW_NO_ENV_HINTS: 1
     steps:
-      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2
         if: runner.os == 'Linux'
         with:
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           persist-credentials: false
-      - uses: Homebrew/actions/setup-homebrew@fccef3b26268fc4a788fd7ad7c189f3a105cbf13 # main (2026-10-09)
+      - uses: Homebrew/actions/setup-homebrew@ceec4e8419bb3c97ce96e9dda7738499ed5f869d # main (2026-10-09)
 
       - name: Build and test the bottle
         run: |
@@ -160,7 +160,7 @@ jobs:
     permissions:
       contents: read   # reads this repo only; the tap write uses HOMEBREW_TAP_TOKEN
     steps:
-      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2
         with:
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
